@@ -12,6 +12,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;0,800;1,700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous">
+    <!-- Supabase JS (anon key only, public by design; security comes from RLS) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
         tailwind.config = {
@@ -167,8 +169,8 @@
                     <i class="fa-solid fa-user-astronaut text-obsidian text-2xl"></i>
                 </div>
                 <div class="space-y-1">
-                    <h3 class="font-display font-bold text-lg text-white">Local Operator</h3>
-                    <p class="font-mono text-xs text-slate-400">Stats saved on this device</p>
+                    <h3 id="dashName" class="font-display font-bold text-lg text-white">Local Operator</h3>
+                    <p id="dashSubtitle" class="font-mono text-xs text-slate-400">Stats saved on this device</p>
                     <span id="dashLevel" class="inline-block px-2.5 py-0.5 rounded-full bg-emerald/20 border border-emerald/40 text-emerald font-mono font-bold text-[10px]">LEVEL 1</span>
                 </div>
             </div>
@@ -202,11 +204,61 @@
                 </div>
             </div>
 
-            <div class="pt-2">
+            <div class="space-y-2 border-t border-white/10 pt-4">
+                <div class="flex justify-between items-center font-mono text-xs">
+                    <span class="text-slate-400">GLOBAL RANK</span>
+                    <span id="dashRank" class="text-cyan font-bold">Sign in to see your rank</span>
+                </div>
+                <div class="space-y-1">
+                    <span class="text-slate-400 font-mono text-xs">RECENT SESSIONS</span>
+                    <ul id="dashRecentSessions" class="text-xs text-slate-300 space-y-1 font-mono list-disc list-inside">
+                        <li>Sign in to see recent sessions.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="pt-2 space-y-2">
+                <button id="signOutBtn" onclick="window.app && window.app.handleSignOut()" class="w-full py-2.5 rounded-xl bg-coral/10 hover:bg-coral/20 border border-coral/30 text-coral font-mono text-xs font-bold transition-all hidden">
+                    SIGN OUT
+                </button>
                 <button onclick="window.app && window.app.closeDashboardModal()" class="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-mono text-xs font-bold transition-all">
                     CLOSE
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Auth Modal (same glass style as dashboardModal) -->
+    <div id="authModal" class="fixed inset-0 bg-obsidian/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-md p-6 relative border-cyan/30 shadow-neon-cyan space-y-5">
+            <button onclick="window.app && window.app.closeAuthModal()" class="absolute top-4 right-4 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h3 class="font-display font-bold text-lg text-white">ACCOUNT</h3>
+            <button onclick="window.app && window.app.handleGoogle()" class="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-mono text-xs font-bold transition-all">
+                Continue with Google
+            </button>
+            <div class="flex gap-2">
+                <button id="authTabSignIn" onclick="window.app && window.app.switchAuthTab('signin')" class="flex-1 py-2 rounded-lg bg-cyan/20 border border-cyan/40 text-cyan font-mono text-xs font-bold">Sign In</button>
+                <button id="authTabSignUp" onclick="window.app && window.app.switchAuthTab('signup')" class="flex-1 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 font-mono text-xs font-bold">Sign Up</button>
+                <button id="authTabForgot" onclick="window.app && window.app.switchAuthTab('forgot')" class="flex-1 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 font-mono text-xs font-bold">Forgot</button>
+            </div>
+            <div id="authPanelSignIn" class="space-y-3">
+                <input id="authSignInEmail" type="email" placeholder="Email" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm outline-none focus:border-cyan">
+                <input id="authSignInPassword" type="password" placeholder="Password" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm outline-none focus:border-cyan">
+                <button onclick="window.app && window.app.handleSignIn()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald to-cyan font-display font-bold text-obsidian text-sm tracking-wider">SIGN IN</button>
+            </div>
+            <div id="authPanelSignUp" class="space-y-3 hidden">
+                <input id="authSignUpName" type="text" placeholder="Display name" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm outline-none focus:border-cyan">
+                <input id="authSignUpEmail" type="email" placeholder="Email" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm outline-none focus:border-cyan">
+                <input id="authSignUpPassword" type="password" placeholder="Password (min 6 characters)" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm outline-none focus:border-cyan">
+                <button onclick="window.app && window.app.handleSignUp()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald to-cyan font-display font-bold text-obsidian text-sm tracking-wider">CREATE ACCOUNT</button>
+            </div>
+            <div id="authPanelForgot" class="space-y-3 hidden">
+                <input id="authForgotEmail" type="email" placeholder="Email" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm outline-none focus:border-cyan">
+                <button onclick="window.app && window.app.handleForgot()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald to-cyan font-display font-bold text-obsidian text-sm tracking-wider">SEND RESET LINK</button>
+            </div>
+            <p id="authMsg" class="font-mono text-xs text-slate-400 min-h-4"></p>
         </div>
     </div>
 
@@ -223,6 +275,7 @@
             </div>
 
             <div class="flex items-center gap-3 sm:gap-4">
+                <button id="authBtn" onclick="window.app && window.app.handleAuthButton()" class="px-3 h-10 rounded-xl glass-tile flex items-center justify-center text-cyan font-mono text-xs font-bold hover:scale-105 transition-all" title="Sign in / Account">SIGN IN</button>
                 <button id="statsBtn" onclick="window.app && window.app.openDashboardModal()" class="w-10 h-10 rounded-xl glass-tile flex items-center justify-center text-gold hover:scale-105 transition-all" title="My Stats">
                     <i class="fa-solid fa-chart-simple text-lg"></i>
                 </button>
@@ -505,6 +558,18 @@
                 </button>
                 <p id="operatorError" class="text-xs text-coral font-mono mt-2 hidden">⚠️ Please enable at least one operator to start.</p>
             </div>
+
+            <!-- Global Leaderboard (DB-backed, top 10 + my rank) -->
+            <div class="glass-panel p-5 sm:p-6 space-y-4 border-gold/20">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-display font-bold text-lg text-white tracking-wide">GLOBAL LEADERBOARD</h3>
+                    <button onclick="window.app && window.app.fetchLeaderboard()" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white font-mono text-xs font-bold">Refresh</button>
+                </div>
+                <ol id="leaderboardList" class="space-y-1 font-mono text-sm text-slate-300">
+                    <li>Loading leaderboard...</li>
+                </ol>
+                <p id="myRankRow" class="font-mono text-xs text-cyan"></p>
+            </div>
         </section>
 
         <!-- Game Screen -->
@@ -581,6 +646,7 @@
                 </div>
                 <h2 class="text-3xl sm:text-4xl font-display font-black text-white">PERFORMANCE ANALYSIS</h2>
                 <p class="text-sm text-slate-400">Detailed breakdown of operational speed, precision, and accuracy bottlenecks.</p>
+                <p id="syncBanner" class="font-mono text-xs text-cyan">Sign in to save your score to the global leaderboard.</p>
             </div>
 
             <!-- Core Stats Banner -->
@@ -665,10 +731,104 @@
 
     <script>
         /* =========================================================
-           THINK FAST — FRONTEND ONLY
-           No backend, no network calls. Player stats are stored
-           in localStorage on this device.
+           THINK FAST — BACKEND SERVICE (spec 0.5.5)
+           ALL Supabase calls live in this one class. Game/UI code
+           never calls supabaseClient directly. Guest mode (localStorage)
+           still works if Supabase fails or the user is logged out.
+           Only the public anon key is used here.
            ========================================================= */
+        const SUPABASE_URL = 'https://stxirtoytwhtfzursxru.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0eGlydG95dHdodGZ6dXJzeHJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM3NzIxNzIsImV4cCI6MjEwOTM0ODE3Mn0.a4n01glTIiRhtvS7Az1kSdvb-kVX14DTtDtSPf1C8e8';
+
+        function escapeHtml(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
+        class BackendService {
+            constructor() {
+                this.client = null;
+                this.enabled = false;
+            }
+            init() {
+                try {
+                    if (window.supabase && window.supabase.createClient) {
+                        this.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                        this.enabled = true;
+                    }
+                } catch (e) { this.enabled = false; this.client = null; }
+                return Promise.resolve({ data: null, error: null });
+            }
+            async _wrap(promise) {
+                try {
+                    const r = await promise;
+                    return { data: r.data, error: r.error };
+                } catch (e) { return { data: null, error: e }; }
+            }
+            _noBackend() { return { data: null, error: { message: 'Backend unavailable — guest mode' } }; }
+            async getSession() {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.auth.getSession());
+            }
+            onAuthChange(cb) {
+                if (!this.client) return { data: { subscription: null } };
+                return this.client.auth.onAuthChange(cb);
+            }
+            async signUp(email, password, displayName) {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.auth.signUp({ email: email, password: password, options: { data: { full_name: displayName } } }));
+            }
+            async signIn(email, password) {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.auth.signInWithPassword({ email: email, password: password }));
+            }
+            async signInGoogle() {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } }));
+            }
+            async signOut() {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.auth.signOut());
+            }
+            async resetPassword(email) {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin }));
+            }
+            async getProfile() {
+                if (!this.client) return this._noBackend();
+                const userRes = await this.client.auth.getUser();
+                const user = userRes && userRes.data ? userRes.data.user : null;
+                if (!user) return { data: null, error: { message: 'Not signed in' } };
+                return this._wrap(this.client.from('profiles').select('*').eq('id', user.id).single());
+            }
+            async updateProfile(fields) {
+                if (!this.client) return this._noBackend();
+                const userRes = await this.client.auth.getUser();
+                const user = userRes && userRes.data ? userRes.data.user : null;
+                if (!user) return { data: null, error: { message: 'Not signed in' } };
+                const allowed = {};
+                if (fields.display_name !== undefined) allowed.display_name = fields.display_name;
+                if (fields.avatar_url !== undefined) allowed.avatar_url = fields.avatar_url;
+                return this._wrap(this.client.from('profiles').update(allowed).eq('id', user.id).select().single());
+            }
+            async submitSession(payload) {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.rpc('submit_session', payload));
+            }
+            async getLeaderboard(n) {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.rpc('get_leaderboard', { p_limit: n || 10 }));
+            }
+            async getMyRank() {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.rpc('get_my_rank'));
+            }
+            async getRecentSessions(n) {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.from('game_sessions').select('id,score,total_asked,total_correct,max_streak,created_at').order('created_at', { ascending: false }).limit(n || 10));
+            }
+        }
 
         class ArcadeAudio {
             constructor() {
@@ -805,6 +965,11 @@
                 // Local Stats Persistence Key
                 this.STORAGE_KEY = 'think_fast_player_stats';
 
+                // Backend (all Supabase calls go through this, never direct)
+                this.backend = new BackendService();
+                this.currentUser = null;
+                this.profile = null;
+
                 // Configuration State
                 this.config = {
                     timeLimitMinutes: 5,
@@ -900,6 +1065,41 @@
             init() {
                 this.particles = new ParticleEngine('particleCanvas');
                 this.updateConfig();
+                const self = this;
+                this.backend.init().then(function () {
+                    return self.backend.getSession();
+                }).then(function (res) {
+                    self.currentUser = res && res.data && res.data.session ? res.data.session.user : null;
+                    if (self.currentUser) {
+                        return self.backend.getProfile().then(function (prof) {
+                            self.profile = prof.data || null;
+                            self.updateAuthUI();
+                            self.fetchLeaderboard();
+                        });
+                    }
+                    self.updateAuthUI();
+                    self.fetchLeaderboard();
+                }).catch(function (e) {
+                    console.warn('Backend init error (guest mode):', e);
+                    self.updateAuthUI();
+                    self.fetchLeaderboard();
+                });
+                this.backend.onAuthChange(function (event, session) {
+                    self.currentUser = session ? session.user : null;
+                    if (self.currentUser) {
+                        self.backend.getProfile().then(function (prof) {
+                            self.profile = prof.data || null;
+                            self.updateAuthUI();
+                        });
+                    } else {
+                        self.profile = null;
+                        self.updateAuthUI();
+                        if (event === 'SIGNED_OUT') {
+                            self.closeDashboardModal();
+                            self.closeAuthModal();
+                        }
+                    }
+                });
             }
 
             /* ---------- Stats modal ---------- */
@@ -907,7 +1107,19 @@
                 const modal = document.getElementById('dashboardModal');
                 if (!modal) return;
 
-                const s = this.getLocalStats();
+                const s = this.profile ? {
+                    highScore: this.profile.high_score || 0,
+                    totalMathSolved: this.profile.total_math_solved || 0,
+                    totalXp: this.profile.total_xp || 0,
+                    userLevel: this.profile.user_level || 1,
+                    sessionsPlayed: this.profile.sessions_played || 0
+                } : this.getLocalStats();
+                const dashName = document.getElementById('dashName');
+                if (dashName) dashName.textContent = this.profile ? (this.profile.display_name || 'Operator') : 'Local Operator';
+                const dashSubtitle = document.getElementById('dashSubtitle');
+                if (dashSubtitle) dashSubtitle.textContent = this.profile ? 'Synced account — server is source of truth' : 'Stats saved on this device';
+                const signOutBtn = document.getElementById('signOutBtn');
+                if (signOutBtn) signOutBtn.classList.toggle('hidden', !this.currentUser);
                 const totalXp = s.totalXp;
                 const userLevel = this.getLevelFromXp(totalXp);
 
@@ -926,6 +1138,159 @@
                 document.getElementById('dashProgressBar').style.width = `${progressPct}%`;
 
                 modal.classList.remove('hidden');
+                this.refreshDashboardExtras();
+            }
+
+            async refreshDashboardExtras() {
+                const rankEl = document.getElementById('dashRank');
+                const listEl = document.getElementById('dashRecentSessions');
+                if (!this.currentUser) {
+                    if (rankEl) rankEl.textContent = 'Sign in to see your rank';
+                    if (listEl) listEl.innerHTML = '<li>Sign in to see recent sessions.</li>';
+                    return;
+                }
+                const rankRes = await this.backend.getMyRank();
+                if (rankEl) rankEl.textContent = rankRes.error ? 'Rank unavailable' : ('#' + rankRes.data);
+                const sessRes = await this.backend.getRecentSessions(10);
+                if (!listEl) return;
+                if (sessRes.error || !sessRes.data || sessRes.data.length === 0) {
+                    listEl.innerHTML = '<li>No sessions yet.</li>';
+                    return;
+                }
+                listEl.innerHTML = '';
+                sessRes.data.forEach(function (row) {
+                    const li = document.createElement('li');
+                    const when = row.created_at ? new Date(row.created_at).toLocaleString() : '';
+                    li.textContent = 'Score ' + row.score + ' — ' + row.total_correct + '/' + row.total_asked + ' correct — ' + when;
+                    listEl.appendChild(li);
+                });
+            }
+
+            /* ---------- Auth UI ---------- */
+            handleAuthButton() {
+                if (this.currentUser) { this.openDashboardModal(); return; }
+                this.openAuthModal();
+            }
+            openAuthModal() {
+                const modal = document.getElementById('authModal');
+                if (modal) modal.classList.remove('hidden');
+            }
+            closeAuthModal() {
+                const modal = document.getElementById('authModal');
+                if (modal) modal.classList.add('hidden');
+            }
+            switchAuthTab(tab) {
+                ['signin', 'signup', 'forgot'].forEach(function (t) {
+                    const panel = document.getElementById('authPanel' + t.charAt(0).toUpperCase() + t.slice(1));
+                    if (panel) panel.classList.toggle('hidden', t !== tab);
+                    const btn = document.getElementById('authTab' + t.charAt(0).toUpperCase() + t.slice(1));
+                    if (btn) btn.className = t === tab
+                        ? 'flex-1 py-2 rounded-lg bg-cyan/20 border border-cyan/40 text-cyan font-mono text-xs font-bold'
+                        : 'flex-1 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 font-mono text-xs font-bold';
+                });
+            }
+            setAuthMsg(text, isError) {
+                const el = document.getElementById('authMsg');
+                if (el) { el.textContent = text || ''; el.className = isError ? 'font-mono text-xs text-coral min-h-4' : 'font-mono text-xs text-emerald min-h-4'; }
+            }
+            async handleSignIn() {
+                const email = document.getElementById('authSignInEmail').value.trim();
+                const password = document.getElementById('authSignInPassword').value;
+                const res = await this.backend.signIn(email, password);
+                if (res.error) { this.setAuthMsg(res.error.message || 'Sign in failed', true); return; }
+                this.setAuthMsg('Signed in.');
+                this.closeAuthModal();
+            }
+            async handleSignUp() {
+                const name = document.getElementById('authSignUpName').value.trim();
+                const email = document.getElementById('authSignUpEmail').value.trim();
+                const password = document.getElementById('authSignUpPassword').value;
+                const res = await this.backend.signUp(email, password, name || 'Operator');
+                if (res.error) { this.setAuthMsg(res.error.message || 'Sign up failed', true); return; }
+                this.setAuthMsg('Account created — check your email to confirm, then sign in.');
+            }
+            async handleForgot() {
+                const email = document.getElementById('authForgotEmail').value.trim();
+                const res = await this.backend.resetPassword(email);
+                if (res.error) { this.setAuthMsg(res.error.message || 'Reset failed', true); return; }
+                this.setAuthMsg('Password reset link sent — check your email.');
+            }
+            async handleGoogle() {
+                const res = await this.backend.signInGoogle();
+                if (res.error) this.setAuthMsg(res.error.message || 'Google sign in failed', true);
+            }
+            async handleSignOut() {
+                await this.backend.signOut();
+                this.currentUser = null;
+                this.profile = null;
+                this.closeDashboardModal();
+                this.closeAuthModal();
+                this.updateAuthUI();
+                this.showSyncBanner('Sign in to save your score to the global leaderboard.');
+            }
+            updateAuthUI() {
+                const btn = document.getElementById('authBtn');
+                if (btn) btn.textContent = this.currentUser ? (this.profile && this.profile.display_name ? this.profile.display_name : 'ACCOUNT') : 'SIGN IN';
+                const signOutBtn = document.getElementById('signOutBtn');
+                if (signOutBtn) signOutBtn.classList.toggle('hidden', !this.currentUser);
+            }
+            showSyncBanner(text) {
+                const el = document.getElementById('syncBanner');
+                if (el) el.textContent = text || '';
+            }
+            async fetchLeaderboard() {
+                const listEl = document.getElementById('leaderboardList');
+                const rankEl = document.getElementById('myRankRow');
+                if (!listEl) return;
+                listEl.innerHTML = '<li>Loading leaderboard...</li>';
+                if (rankEl) rankEl.textContent = '';
+                const res = await this.backend.getLeaderboard(10);
+                if (res.error || !res.data) {
+                    listEl.innerHTML = '<li>Leaderboard unavailable</li>';
+                    return;
+                }
+                listEl.innerHTML = '';
+                const self = this;
+                res.data.forEach(function (row) {
+                    const li = document.createElement('li');
+                    const isMe = self.currentUser && row.user_id === self.currentUser.id;
+                    li.className = isMe ? 'text-cyan font-bold' : '';
+                    li.textContent = '#' + row.rank + ' ' + (row.display_name || 'Operator') + ' — Level ' + row.user_level + ' — ' + row.high_score.toLocaleString() + ' pts' + (isMe ? ' (you)' : '');
+                    listEl.appendChild(li);
+                });
+                if (res.data.length === 0) listEl.innerHTML = '<li>No scores yet — be the first.</li>';
+                if (this.currentUser && !res.data.some(function (r) { return r.user_id === self.currentUser.id; })) {
+                    const rankRes = await this.backend.getMyRank();
+                    if (rankEl && !rankRes.error && this.profile) {
+                        rankEl.textContent = 'Your rank: #' + rankRes.data + ' — ' + (this.profile.display_name || 'Operator') + ' — ' + (this.profile.high_score || 0).toLocaleString() + ' pts';
+                    }
+                }
+            }
+            async syncSessionToServer(roundScore, stats, isRetry) {
+                const payload = {
+                    p_score: roundScore,
+                    p_duration: Math.round(this.config.timeLimitMinutes * 60),
+                    p_asked: stats.totalAsked,
+                    p_correct: stats.totalCorrect,
+                    p_max_streak: this.state.maxStreak,
+                    p_operator_stats: stats.byOperator,
+                    p_config: { timeLimitMinutes: this.config.timeLimitMinutes, operators: this.config.operators }
+                };
+                const res = await this.backend.submitSession(payload);
+                if (res.error) {
+                    const msg = String((res.error && res.error.message) || '');
+                    const finalErrors = ['rate_limited', 'too_fast', 'score_too_high'];
+                    if (!isRetry && !finalErrors.some(function (e) { return msg.indexOf(e) !== -1; })) {
+                        const self = this;
+                        setTimeout(function () { self.syncSessionToServer(roundScore, stats, true); }, 3000);
+                        return;
+                    }
+                    this.showSyncBanner('Score could not be synced. Your local copy is kept.');
+                    return;
+                }
+                if (res.data) this.profile = res.data;
+                this.showSyncBanner('Score synced to the global leaderboard.');
+                this.fetchLeaderboard();
             }
 
             closeDashboardModal() {
@@ -1408,6 +1773,15 @@
                     userLevel: newLevel,
                     sessionsPlayed: newSessions
                 });
+
+                // Backend sync: logged-in only, and endGame only runs on normal timer finish.
+                // Guest progress stays in localStorage and is NOT merged into accounts.
+                if (this.currentUser) {
+                    this.showSyncBanner('Syncing score to the global leaderboard…');
+                    this.syncSessionToServer(roundScore, stats, false);
+                } else {
+                    this.showSyncBanner('Sign in to save your score to the global leaderboard.');
+                }
 
                 document.getElementById('finalScore').innerText = roundScore.toLocaleString();
                 document.getElementById('finalTotalSolved').innerText = newTotalSolved.toLocaleString();
