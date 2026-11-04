@@ -399,6 +399,7 @@ async function gate() {
   showPage('overview');
 }
 document.getElementById('loginBtn').addEventListener('click', async function () {
+  if (!admin.client) { document.getElementById('loginMsg').textContent = 'Admin client failed to load — reload the page and try again.'; return; }
   const e = document.getElementById('loginEmail').value.trim(), p = document.getElementById('loginPass').value;
   const r = await admin.signIn(e, p);
   if (r.error) { document.getElementById('loginMsg').textContent = friendlyErr(r.error); return; }
