@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Think Fast // Super Admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;0,800;1,700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', sans-serif; background: #07070f; color: #e5e7eb; }
+  .font-display { font-family: 'Orbitron', sans-serif; }
+  .font-mono2 { font-family: 'JetBrains Mono', monospace; }
+  .glass { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.10); backdrop-filter: blur(12px); border-radius: 16px; }
+  .neon { color: #00FF9D; } .neon-pink { color: #FF3366; }
+  .btn { padding: 8px 14px; border-radius: 10px; font-weight: 700; font-size: 13px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); cursor: pointer; }
+  .btn:hover { background: rgba(255,255,255,0.12); }
+  .btn-green { background: #00FF9D; color: #04120a; border-color: #00FF9D; }
+  .btn-red { background: #FF3366; color: #fff; border-color: #FF3366; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .inp { width: 100%; padding: 9px 12px; border-radius: 10px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 14px; }
+  .navbtn { display: block; width: 100%; text-align: left; padding: 10px 14px; border-radius: 10px; font-weight: 600; font-size: 14px; color: #cbd5e1; cursor: pointer; }
+  .navbtn.active { background: rgba(0,255,157,0.15); color: #00FF9D; }
+  .navbtn:hover { background: rgba(255,255,255,0.06); }
+  table.tbl { width: 100%; font-size: 13px; border-collapse: collapse; }
+  table.tbl th { text-align: left; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.12); color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  table.tbl td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); vertical-align: top; }
+  table.tbl tr:hover td { background: rgba(255,255,255,0.03); }
+  .hidden { display: none !important; }
+  .toast { position: fixed; bottom: 20px; right: 20px; z-index: 100; padding: 12px 18px; border-radius: 12px; font-weight: 600; font-size: 14px; max-width: 420px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; }
+</style>
+</head>
+<body>
+<div class="max-w-7xl mx-auto px-4 py-6">
+
+  <!-- ============ LOGIN VIEW ============ -->
+  <div id="loginView" class="glass max-w-md mx-auto p-8 mt-16">
+    <h1 class="font-display text-2xl neon">THINK FAST // ADMIN</h1>
+    <p class="text-sm text-slate-400 mt-2">Super Admin Panel. Sign in with an admin account. Server-side role checks protect every action.</p>
+    <div class="mt-6 space-y-3">
+      <input id="loginEmail" class="inp" type="email" placeholder="Email" autocomplete="email">
+      <input id="loginPass" class="inp" type="password" placeholder="Password" autocomplete="current-password">
+      <button id="loginBtn" class="btn btn-green w-full">SIGN IN</button>
+      <button id="loginGoogleBtn" class="btn w-full">Continue with Google</button>
+      <p id="loginMsg" class="text-sm text-red-400"></p>
+    </div>
+  </div>
+
+  <!-- ============ DENIED VIEW ============ -->
+  <div id="deniedView" class="glass max-w-md mx-auto p-8 mt-16 hidden">
+    <h1 class="font-display text-2xl neon-pink">ACCESS DENIED</h1>
+    <p class="text-sm text-slate-400 mt-2">This account has no admin role. Ask a superadmin to grant you access.</p>
+    <button id="deniedSignOut" class="btn btn-red mt-6">SIGN OUT</button>
+  </div>
+
+  <!-- ============ PANEL VIEW ============ -->
+  <div id="panelView" class="hidden">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="font-display text-2xl">THINK FAST <span class="neon">// ADMIN</span></h1>
+      <div class="flex items-center gap-3 text-sm">
+        <span id="whoami" class="font-mono2 text-slate-300"></span>
+        <span id="roleBadge" class="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 font-bold text-xs"></span>
+        <a href="/" class="btn">← Game</a>
+        <button id="signOutBtn" class="btn btn-red">SIGN OUT</button>
+      </div>
+    </div>
+
+    <div id="mfaBanner" class="glass p-4 mt-4 hidden">
+      <p class="text-sm font-bold text-amber-300">⚠ MFA not enrolled — admin accounts should use TOTP two-factor.</p>
+      <div class="flex gap-2 mt-3">
+        <button id="mfaEnrollBtn" class="btn">Enroll TOTP</button>
+        <input id="mfaCode" class="inp" style="max-width:180px" placeholder="6-digit code">
+        <button id="mfaVerifyBtn" class="btn btn-green">Verify</button>
+      </div>
+      <div id="mfaQr" class="mt-3 text-sm"></div>
+      <p id="mfaMsg" class="text-sm text-slate-400 mt-2"></p>
+    </div>
+    <div id="maintBadge" class="glass p-3 mt-4 hidden">
+      <p class="text-sm font-bold text-amber-300">⚠ Maintenance mode is ON — players see the maintenance overlay (admins bypass it in the game).</p>
+    </div>
+
+    <div class="grid md:grid-cols-[220px_1fr] gap-5 mt-5">
+      <nav class="glass p-3 h-fit">
+        <button class="navbtn active" data-page="overview">Overview</button>
+        <button class="navbtn" data-page="users">Users</button>
+        <button class="navbtn" data-page="sessions">Sessions</button>
+        <button class="navbtn" data-page="leaderboard">Leaderboard</button>
+        <button class="navbtn superonly" data-page="config">Game Config</button>
+        <button class="navbtn" data-page="announcements">Announcements</button>
+        <button class="navbtn" data-page="audit">Audit Log</button>
+        <button class="navbtn superonly" data-page="admins">Admins</button>
+        <button class="navbtn superonly" data-page="danger">Data &amp; Danger Zone</button>
+      </nav>
+
+      <main>
+        <!-- OVERVIEW -->
+        <section id="page-overview" class="page">
+          <div id="kpis" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+          <div class="glass p-4 mt-4"><canvas id="chartUsers" height="90"></canvas></div>
+          <div class="glass p-4 mt-4"><canvas id="chartSessions" height="90"></canvas></div>
+          <div class="glass p-4 mt-4">
+            <h2 class="font-bold mb-3">Latest admin actions</h2>
+            <div id="latestAudit" class="text-sm space-y-2"></div>
+          </div>
+        </section>
+
+        <!-- USERS -->
+        <section id="page-users" class="page hidden">
+          <div class="glass p-4">
+            <div class="flex flex-wrap gap-2">
+              <input id="userSearch" class="inp" style="max-width:260px" placeholder="Search email / name">
+              <select id="userStatus" class="inp" style="max-width:160px">
+                <option value="all">All</option><option value="banned">Banned</option>
+                <option value="flagged">Flagged</option><option value="admins">Admins</option>
+              </select>
+              <select id="userSort" class="inp" style="max-width:160px">
+                <option value="created_at">Newest</option><option value="high_score">High score</option>
+                <option value="total_xp">Total XP</option><option value="sessions_played">Sessions</option>
+                <option value="display_name">Name</option>
+              </select>
+              <button id="userSearchBtn" class="btn btn-green">Search</button>
+            </div>
+            <div id="userTable" class="overflow-x-auto mt-3"></div>
+            <div class="flex gap-2 mt-3">
+              <button id="userPrev" class="btn">← Prev</button>
+              <span id="userPageInfo" class="text-sm self-center text-slate-400"></span>
+              <button id="userNext" class="btn">Next →</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- SESSIONS -->
+        <section id="page-sessions" class="page hidden">
+          <div class="glass p-4">
+            <div class="flex flex-wrap gap-2 items-center">
+              <label class="text-sm"><input type="checkbox" id="sessFlaggedOnly"> Flagged only</label>
+              <button id="sessRefresh" class="btn btn-green">Refresh</button>
+            </div>
+            <div id="sessTable" class="overflow-x-auto mt-3"></div>
+            <div class="flex gap-2 mt-3">
+              <button id="sessPrev" class="btn">← Prev</button>
+              <span id="sessPageInfo" class="text-sm self-center text-slate-400"></span>
+              <button id="sessNext" class="btn">Next →</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- LEADERBOARD -->
+        <section id="page-leaderboard" class="page hidden">
+          <div class="glass p-4">
+            <div class="flex gap-2"><button id="lbRefresh" class="btn btn-green">Refresh</button></div>
+            <div id="lbTable" class="overflow-x-auto mt-3"></div>
+            <h2 class="font-bold mt-6 mb-2">Snapshots</h2>
+            <div id="snapList" class="text-sm space-y-1"></div>
+          </div>
+        </section>
+
+        <!-- CONFIG (superadmin) -->
+        <section id="page-config" class="page hidden">
+          <div class="glass p-4">
+            <p class="text-sm text-slate-400 mb-3">Every save needs a reason (audited). The panel warns if scoring can legitimately beat the anti-cheat cap: safe minimum = 780 × highest combo multiplier + speed bonus factor.</p>
+            <label class="text-sm text-slate-400">Reason for this save</label>
+            <input id="cfgReason" class="inp mt-1" placeholder="e.g. Season tuning — penalty raised">
+            <p id="cfgWarn" class="text-sm text-amber-300 mt-2"></p>
+            <div id="cfgForms" class="space-y-5 mt-4"></div>
+          </div>
+        </section>
+
+        <!-- ANNOUNCEMENTS -->
+        <section id="page-announcements" class="page hidden">
+          <div class="glass p-4">
+            <h2 class="font-bold mb-3">New / edit announcement</h2>
+            <div class="grid md:grid-cols-2 gap-3">
+              <input id="annTitle" class="inp" placeholder="Title">
+              <select id="annLevel" class="inp"><option value="info">info</option><option value="success">success</option><option value="warning">warning</option><option value="critical">critical</option></select>
+              <textarea id="annBody" class="inp md:col-span-2" rows="3" placeholder="Body"></textarea>
+              <label class="text-sm">Starts at <input id="annStarts" class="inp" type="datetime-local"></label>
+              <label class="text-sm">Ends at (optional) <input id="annEnds" class="inp" type="datetime-local"></label>
+              <label class="text-sm flex items-center gap-2"><input type="checkbox" id="annActive" checked> Active</label>
+              <input id="annId" type="hidden">
+            </div>
+            <div class="flex gap-2 mt-3">
+              <button id="annSave" class="btn btn-green">Save announcement</button>
+              <button id="annClear" class="btn">Clear form</button>
+            </div>
+            <div id="annPreview" class="mt-4"></div>
+            <h2 class="font-bold mt-6 mb-2">All announcements</h2>
+            <div id="annList" class="space-y-2"></div>
+          </div>
+        </section>
+
+        <!-- AUDIT -->
+        <section id="page-audit" class="page hidden">
+          <div class="glass p-4">
+            <div class="flex flex-wrap gap-2">
+              <input id="auditActor" class="inp" style="max-width:260px" placeholder="Actor user id (uuid)">
+              <select id="auditAction" class="inp" style="max-width:220px">
+                <option value="">All actions</option>
+                <option>user.ban</option><option>user.unban</option><option>user.hide</option><option>user.unhide</option>
+                <option>user.update</option><option>user.adjust_stats</option><option>user.reset_stats</option>
+                <option>user.delete</option><option>user.password_reset</option><option>session.flag</option>
+                <option>session.unflag</option><option>session.void</option><option>config.update</option>
+                <option>announcement.save</option><option>announcement.delete</option><option>leaderboard.snapshot</option>
+                <option>leaderboard.reset</option><option>role.grant</option><option>role.change</option>
+                <option>role.revoke</option><option>export.users</option><option>export.sessions</option>
+              </select>
+              <button id="auditSearch" class="btn btn-green">Search</button>
+            </div>
+            <div id="auditTable" class="overflow-x-auto mt-3"></div>
+            <div class="flex gap-2 mt-3">
+              <button id="auditPrev" class="btn">← Prev</button>
+              <span id="auditPageInfo" class="text-sm self-center text-slate-400"></span>
+              <button id="auditNext" class="btn">Next →</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ADMINS (superadmin) -->
+        <section id="page-admins" class="page hidden">
+          <div class="glass p-4">
+            <div class="flex flex-wrap gap-2">
+              <input id="grantEmail" class="inp" style="max-width:280px" placeholder="User email (must already exist)">
+              <select id="grantRole" class="inp" style="max-width:160px"><option value="admin">admin</option><option value="superadmin">superadmin</option></select>
+              <input id="grantReason" class="inp" style="max-width:260px" placeholder="Reason (required)">
+              <button id="grantBtn" class="btn btn-green">Grant role</button>
+            </div>
+            <div id="adminList" class="mt-4"></div>
+          </div>
+        </section>
+
+        <!-- DANGER (superadmin) -->
+        <section id="page-danger" class="page hidden">
+          <div class="glass p-4 space-y-6">
+            <div>
+              <h2 class="font-bold">CSV exports (audited)</h2>
+              <div class="flex gap-2 mt-2">
+                <button id="exportUsers" class="btn">Export users CSV</button>
+                <button id="exportSessions" class="btn">Export sessions CSV</button>
+              </div>
+            </div>
+            <div>
+              <h2 class="font-bold">Season reset</h2>
+              <p class="text-sm text-slate-400">Snapshots the current top 100 first (mandatory), then sets every high_score to 0. XP and levels are NOT touched. Note: recomputing a profile from its sessions would restore its high_score — a season reset is a leaderboard reset, not a session purge.</p>
+              <div class="flex flex-wrap gap-2 mt-2">
+                <input id="resetLabel" class="inp" style="max-width:260px" placeholder="Snapshot label, e.g. Season 1">
+                <input id="resetReason" class="inp" style="max-width:260px" placeholder="Reason (required)">
+                <button id="resetSeasonBtn" class="btn btn-red">Reset season</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+</div>
+
+<!-- Generic action modal -->
+<div id="actionModal" class="modal-bg hidden">
+  <div class="glass max-w-lg w-full p-6 bg-[#0b0b18]">
+    <h2 id="actionModalTitle" class="font-bold text-lg"></h2>
+    <p id="actionModalText" class="text-sm text-slate-400 mt-2"></p>
+    <div id="actionModalFields" class="mt-4 space-y-3"></div>
+    <div class="flex gap-2 mt-5">
+      <button id="actionModalConfirm" class="btn btn-red">Confirm</button>
+      <button id="actionModalCancel" class="btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- User drawer modal -->
+<div id="userModal" class="modal-bg hidden">
+  <div class="glass max-w-2xl w-full p-6 bg-[#0b0b18] max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between"><h2 class="font-bold text-lg">User detail</h2><button id="userModalClose" class="btn">✕</button></div>
+    <div id="userModalBody" class="mt-3 text-sm space-y-3"></div>
+    <div id="userModalActions" class="flex flex-wrap gap-2 mt-4"></div>
+  </div>
+</div>
+
+<!-- Session detail modal -->
+<div id="sessModal" class="modal-bg hidden">
+  <div class="glass max-w-2xl w-full p-6 bg-[#0b0b18] max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between"><h2 class="font-bold text-lg">Session detail</h2><button id="sessModalClose" class="btn">✕</button></div>
+    <div id="sessModalBody" class="mt-3 text-sm"></div>
+  </div>
+</div>
+
+<div id="toastBox"></div>
+<script>
+const SUPABASE_URL = 'https://stxirtoytwhtfzursxru.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0eGlydG95dHdodGZ6dXJzeHJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM3NzIxNzIsImV4cCI6MjEwOTM0ODE3Mn0.a4n01glTIiRhtvS7Az1kSdvb-kVX14DTtDtSPf1C8e8';
+const EDGE_URL = SUPABASE_URL + '/functions/v1/admin-user-actions';
+
+function escapeHtml(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function toast(msg, bad) {
+  const d = document.createElement('div');
+  d.className = 'toast ' + (bad ? 'bg-red-600' : 'bg-emerald-600');
+  d.textContent = msg;
+  document.getElementById('toastBox').appendChild(d);
+  setTimeout(function () { d.remove(); }, 4500);
+}
+function friendlyErr(e) {
+  const m = (e && e.message) || String(e || 'Unknown error');
+  if (m.indexOf('forbidden') >= 0) return 'Access denied — your role does not allow this action.';
+  if (m.indexOf('reason_required') >= 0) return 'A reason is required for this action.';
+  if (m.indexOf('last_superadmin') >= 0) return 'Refused — the system must keep at least 1 superadmin.';
+  return m;
+}
+function fmtDate(s) { if (!s) return '—'; try { return new Date(s).toLocaleString(); } catch (e) { return s; } }
+function download(name, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
+  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
+
+class AdminService {
+  constructor() { this.client = null; this.role = null; this.session = null; }
+  init() {
+    try { this.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch (e) { this.client = null; }
+    return this.client;
+  }
+  async _wrap(p) { try { const r = await p; return { data: r.data, error: r.error }; } catch (e) { return { data: null, error: e }; } }
+  async signIn(e, p) { return this._wrap(this.client.auth.signInWithPassword({ email: e, password: p })); }
+  async signInGoogle() { return this._wrap(this.client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + '/admin.html' } })); }
+  async signOut() { return this._wrap(this.client.auth.signOut()); }
+  async getSession() { return this._wrap(this.client.auth.getSession()); }
+  async rpc(name, args) { return this._wrap(this.client.rpc(name, args || {})); }
+  async edge(action, body) {
+    try {
+      const s = await this.client.auth.getSession();
+      const token = s.data && s.data.session ? s.data.session.access_token : '';
+      const r = await fetch(EDGE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(Object.assign({ action: action }, body || {})) });
+      const j = await r.json();
+      return { data: j.ok ? j : null, error: j.ok ? null : { message: j.error || 'Edge function error' } };
+    } catch (e) { return { data: null, error: e }; }
+  }
+}
+const admin = new AdminService();
+let myUser = null, myRole = null, mfaFactorId = null, idleTimer = null;
+function resetIdle() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(async function () {
+    if (myUser) { await admin.signOut(); location.reload(); }
+  }, 30 * 60 * 1000);
+}
+['click', 'keydown', 'mousemove'].forEach(function (ev) { document.addEventListener(ev, resetIdle); });
+
+// ---------- Gate ----------
+function show(view) {
+  ['loginView', 'deniedView', 'panelView'].forEach(function (id) { document.getElementById(id).classList.toggle('hidden', id !== view); });
+}
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(function (s) { s.classList.add('hidden'); });
+  document.getElementById('page-' + page).classList.remove('hidden');
+  document.querySelectorAll('.navbtn').forEach(function (b) { b.classList.toggle('active', b.dataset.page === page); });
+  if (page === 'overview') loadOverview();
+  if (page === 'users') loadUsers();
+  if (page === 'sessions') loadSessions();
+  if (page === 'leaderboard') loadLeaderboard();
+  if (page === 'config') loadConfig();
+  if (page === 'announcements') loadAnnouncements();
+  if (page === 'audit') loadAudit();
+  if (page === 'admins') loadAdmins();
+}
+document.querySelectorAll('.navbtn').forEach(function (b) { b.addEventListener('click', function () { showPage(b.dataset.page); }); });
+
+async function gate() {
+  admin.init();
+  const sess = await admin.getSession();
+  const session = sess.data && sess.data.session ? sess.data.session : null;
+  if (!session) { show('loginView'); return; }
+  myUser = session.user;
+  const isAdm = await admin.rpc('is_admin');
+  if (!isAdm.data) { show('deniedView'); return; }
+  const isSup = await admin.rpc('is_superadmin');
+  myRole = isSup.data ? 'superadmin' : 'admin';
+  admin.role = myRole;
+  document.getElementById('whoami').textContent = myUser.email || myUser.id;
+  document.getElementById('roleBadge').textContent = myRole;
+  if (myRole !== 'superadmin') document.querySelectorAll('.superonly').forEach(function (b) { b.style.display = 'none'; });
+  show('panelView');
+  resetIdle();
+  // MFA banner: list factors, show banner if no verified TOTP factor.
+  try {
+    const factors = await admin.client.auth.mfa.listFactors();
+    const list = (factors.data && (factors.data.totp || [])) || [];
+    if (!list.some(function (f) { return f.status === 'verified'; })) {
+      document.getElementById('mfaBanner').classList.remove('hidden');
+    }
+  } catch (e) { /* MFA check is advisory only */ }
+  try {
+    const cfg = await admin.rpc('get_public_config');
+    if (cfg.data && cfg.data.maintenance && cfg.data.maintenance.enabled) document.getElementById('maintBadge').classList.remove('hidden');
+  } catch (e) {}
+  const login = await admin.rpc('admin_list_audit', { p_limit: 1, p_offset: 0 });
+  showPage('overview');
+}
+document.getElementById('loginBtn').addEventListener('click', async function () {
+  const e = document.getElementById('loginEmail').value.trim(), p = document.getElementById('loginPass').value;
+  const r = await admin.signIn(e, p);
+  if (r.error) { document.getElementById('loginMsg').textContent = friendlyErr(r.error); return; }
+  // AAL2 step-up is enforced by the app for superadmin writes only if enrolled;
+  // sign-in itself stays as the game does. If an AAL2 challenge is required it surfaces here.
+  gate();
+});
+document.getElementById('loginGoogleBtn').addEventListener('click', async function () { await admin.signInGoogle(); });
+document.getElementById('signOutBtn').addEventListener('click', async function () { await admin.signOut(); location.reload(); });
+document.getElementById('deniedSignOut').addEventListener('click', async function () { await admin.signOut(); location.reload(); });
+
+// MFA enroll / verify (TOTP)
+document.getElementById('mfaEnrollBtn').addEventListener('click', async function () {
+  const r = await admin.client.auth.mfa.enroll({ factorType: 'totp' });
+  if (r.error) { document.getElementById('mfaMsg').textContent = friendlyErr(r.error); return; }
+  mfaFactorId = r.data.id;
+  document.getElementById('mfaQr').innerHTML = '<p>Scan this QR in your authenticator app, or enter the secret manually:</p>' + (r.data.totp ? r.data.totp.qr_code : '') + '<p class="font-mono2 break-all">' + escapeHtml(r.data.totp ? r.data.totp.secret : '') + '</p>';
+  document.getElementById('mfaMsg').textContent = 'Now enter the 6-digit code and press Verify.';
+});
+document.getElementById('mfaVerifyBtn').addEventListener('click', async function () {
+  const code = document.getElementById('mfaCode').value.trim();
+  if (!mfaFactorId) { document.getElementById('mfaMsg').textContent = 'Press Enroll TOTP first.'; return; }
+  const ch = await admin.client.auth.mfa.challenge({ factorId: mfaFactorId });
+  if (ch.error) { document.getElementById('mfaMsg').textContent = friendlyErr(ch.error); return; }
+  const v = await admin.client.auth.mfa.verify({ factorId: mfaFactorId, challengeId: ch.data.id, code: code });
+  if (v.error) { document.getElementById('mfaMsg').textContent = friendlyErr(v.error); return; }
+  document.getElementById('mfaMsg').textContent = 'MFA enrolled and verified.';
+  document.getElementById('mfaBanner').classList.add('hidden');
+});
+
+// ---------- Generic modal ----------
+let modalConfirmFn = null;
+function openModal(title, text, fieldsHtml, confirmLabel, fn) {
+  document.getElementById('actionModalTitle').textContent = title;
+  document.getElementById('actionModalText').textContent = text;
+  document.getElementById('actionModalFields').innerHTML = fieldsHtml;
+  document.getElementById('actionModalConfirm').textContent = confirmLabel || 'Confirm';
+  modalConfirmFn = fn;
+  document.getElementById('actionModal').classList.remove('hidden');
+}
+document.getElementById('actionModalCancel').addEventListener('click', function () { document.getElementById('actionModal').classList.add('hidden'); });
+document.getElementById('actionModalConfirm').addEventListener('click', async function () {
+  if (modalConfirmFn) await modalConfirmFn();
+  document.getElementById('actionModal').classList.add('hidden');
+});
+function reasonField() { return '<label class="text-sm">Reason (required for audited actions)<textarea id="modalReason" class="inp" rows="2"></textarea></label>'; }
+function typeField(word) { return '<label class="text-sm">Type <b>' + escapeHtml(word) + '</b> to confirm<input id="modalType" class="inp"></label>'; }
+
+// ---------- Overview ----------
+let chartU = null, chartS = null;
+async function loadOverview() {
+  const r = await admin.rpc('admin_dashboard_stats');
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  const d = r.data;
+  const cards = [
+    ['Total users', d.total_users], ['New 7d', d.new_users_7d], ['New 30d', d.new_users_30d],
+    ['Active 24h', d.active_users_24h], ['Active 7d', d.active_users_7d], ['Sessions', d.total_sessions],
+    ['Sessions 24h', d.sessions_24h], ['Avg score', Math.round(d.avg_score)], ['Avg accuracy', (d.avg_accuracy * 100).toFixed(1) + '%'],
+    ['Math solved', d.total_math_solved], ['Flagged open', d.flagged_sessions_open], ['Banned', d.banned_users],
+  ];
+  document.getElementById('kpis').innerHTML = cards.map(function (c) {
+    return '<div class="glass p-4"><p class="text-xs text-slate-400">' + c[0] + '</p><p class="font-display text-2xl mt-1">' + c[1] + '</p></div>';
+  }).join('');
+  const days = (d.daily || []).map(function (x) { return x.day; });
+  if (chartU) chartU.destroy(); if (chartS) chartS.destroy();
+  chartU = new Chart(document.getElementById('chartUsers'), { type: 'line', data: { labels: days, datasets: [{ label: 'New users / day', data: (d.daily || []).map(function (x) { return x.new_users; }), borderColor: '#00FF9D', tension: 0.3 }] } });
+  chartS = new Chart(document.getElementById('chartSessions'), { type: 'line', data: { labels: days, datasets: [{ label: 'Sessions / day', data: (d.daily || []).map(function (x) { return x.sessions; }), borderColor: '#FF3366', tension: 0.3 }, { label: 'Avg score / day', data: (d.daily || []).map(function (x) { return x.avg_score; }), borderColor: '#38bdf8', tension: 0.3 }] } });
+  const a = await admin.rpc('admin_list_audit', { p_limit: 10, p_offset: 0 });
+  document.getElementById('latestAudit').innerHTML = (a.data || []).map(function (x) {
+    return '<p><b>' + escapeHtml(x.action) + '</b> · ' + escapeHtml(x.actor_role) + ' · ' + fmtDate(x.created_at) + (x.reason ? ' · ' + escapeHtml(x.reason) : '') + '</p>';
+  }).join('') || '<p class="text-slate-400">No admin actions yet.</p>';
+}
+
+// ---------- Users ----------
+let userPage = 0; const USER_PAGE_SIZE = 25;
+async function loadUsers() {
+  const r = await admin.rpc('admin_list_users', {
+    p_search: document.getElementById('userSearch').value.trim() || null,
+    p_status: document.getElementById('userStatus').value,
+    p_sort: document.getElementById('userSort').value, p_dir: 'desc',
+    p_limit: USER_PAGE_SIZE, p_offset: userPage * USER_PAGE_SIZE });
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  const rows = r.data || [];
+  const total = rows.length ? rows[0].total_count : 0;
+  document.getElementById('userPageInfo').textContent = 'Page ' + (userPage + 1) + ' · ' + total + ' users';
+  document.getElementById('userTable').innerHTML = '<table class="tbl"><tr><th>User</th><th>Level</th><th>High score</th><th>XP</th><th>Sessions</th><th>Status</th><th></th></tr>' +
+    rows.map(function (u) {
+      return '<tr><td><b>' + escapeHtml(u.display_name) + '</b><br><span class="text-slate-400">' + escapeHtml(u.email) + '</span>' +
+        (u.role ? '<br><span class="text-emerald-300 font-bold">' + escapeHtml(u.role) + '</span>' : '') + '</td>' +
+        '<td>' + u.user_level + '</td><td>' + u.high_score + '</td><td>' + u.total_xp + '</td><td>' + u.sessions_played + '</td>' +
+        '<td>' + (u.is_banned ? '<span class="text-red-400 font-bold">BANNED</span>' : '') + (u.hidden_from_leaderboard ? '<br><span class="text-amber-300">hidden</span>' : '') + '</td>' +
+        '<td><button class="btn" onclick="openUser(\'' + u.id + '\')">Open</button></td></tr>';
+    }).join('') + '</table>';
+}
+document.getElementById('userSearchBtn').addEventListener('click', function () { userPage = 0; loadUsers(); });
+document.getElementById('userPrev').addEventListener('click', function () { if (userPage > 0) { userPage--; loadUsers(); } });
+document.getElementById('userNext').addEventListener('click', function () { userPage++; loadUsers(); });
+
+async function openUser(id) {
+  const r = await admin.rpc('admin_get_user', { p_user_id: id });
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  const d = r.data, p = d.profile || {};
+  const body = document.getElementById('userModalBody');
+  body.innerHTML =
+    '<p><b>' + escapeHtml(p.display_name) + '</b> · ' + escapeHtml(d.email) + ' · role: <b>' + escapeHtml(d.role || 'user') + '</b></p>' +
+    '<p>Level ' + p.user_level + ' · High score ' + p.high_score + ' · XP ' + p.total_xp + ' · Solved ' + p.total_math_solved + ' · Sessions ' + p.sessions_played + '</p>' +
+    '<p>Banned: ' + (p.is_banned ? 'yes (' + escapeHtml(p.banned_reason) + ')' : 'no') + ' · Hidden from leaderboard: ' + (p.hidden_from_leaderboard ? 'yes' : 'no') + '</p>' +
+    '<p>Created: ' + fmtDate(d.created_at) + ' · Last sign-in: ' + fmtDate(d.last_sign_in_at) + '</p>' +
+    '<p>Admin notes: ' + escapeHtml(p.admin_notes) + '</p>' +
+    '<h3 class="font-bold mt-3">Last sessions</h3>' +
+    (d.sessions || []).map(function (s) { return '<p>' + fmtDate(s.created_at) + ' · ' + s.score + ' pts · ' + s.total_correct + '/' + s.total_asked + (s.is_flagged ? ' · FLAGGED' : '') + (s.is_voided ? ' · VOIDED' : '') + '</p>'; }).join('') +
+    '<h3 class="font-bold mt-3">Audit entries about this user</h3>' +
+    (d.audit || []).map(function (a) { return '<p>' + escapeHtml(a.action) + ' · ' + fmtDate(a.created_at) + (a.reason ? ' · ' + escapeHtml(a.reason) : '') + '</p>'; }).join('');
+  const acts = document.getElementById('userModalActions');
+  acts.innerHTML = '';
+  function mkBtn(label, cls, fn) { const b = document.createElement('button'); b.className = 'btn ' + (cls || ''); b.textContent = label; b.onclick = fn; acts.appendChild(b); }
+  mkBtn(p.is_banned ? 'Unban' : 'Ban', p.is_banned ? '' : 'btn-red', function () {
+    openModal(p.is_banned ? 'Unban user' : 'Ban user', 'Ban also blocks sign-in via the auth service. Reason is required when banning.', reasonField(), p.is_banned ? 'Unban' : 'Ban', async function () {
+      const reason = document.getElementById('modalReason').value.trim();
+      const rpc = await admin.rpc('admin_set_ban', { p_user_id: id, p_banned: !p.is_banned, p_reason: reason || null });
+      if (rpc.error) { toast(friendlyErr(rpc.error), true); return; }
+      const edge = await admin.edge(p.is_banned ? 'unban_auth' : 'ban_auth', { user_id: id });
+      if (edge.error) { toast('Profile ban updated, but auth ban failed: ' + friendlyErr(edge.error), true); }
+      else toast(p.is_banned ? 'User unbanned.' : 'User banned.');
+      document.getElementById('userModal').classList.add('hidden'); loadUsers();
+    });
+  });
+  mkBtn(p.hidden_from_leaderboard ? 'Show on leaderboard' : 'Hide from leaderboard', '', function () {
+    openModal('Leaderboard visibility', '', reasonField(), 'Confirm', async function () {
+      const reason = document.getElementById('modalReason').value.trim();
+      const rpc = await admin.rpc('admin_set_hidden', { p_user_id: id, p_hidden: !p.hidden_from_leaderboard, p_reason: reason || null });
+      if (rpc.error) { toast(friendlyErr(rpc.error), true); return; }
+      toast('Visibility updated.'); document.getElementById('userModal').classList.add('hidden'); loadUsers();
+    });
+  });
+  if (myRole === 'superadmin') {
+    mkBtn('Edit name / notes', '', function () {
+      openModal('Edit user', '', '<label class="text-sm">Display name<input id="modalName" class="inp" value="' + escapeHtml(p.display_name) + '"></label><label class="text-sm">Admin notes<textarea id="modalNotes" class="inp" rows="2">' + escapeHtml(p.admin_notes) + '</textarea></label>' + reasonField(), 'Save', async function () {
+        const rpc = await admin.rpc('admin_update_user', { p_user_id: id, p_display_name: document.getElementById('modalName').value.trim() || null, p_admin_notes: document.getElementById('modalNotes').value, p_reason: document.getElementById('modalReason').value.trim() || null });
+        if (rpc.error) { toast(friendlyErr(rpc.error), true); return; }
+        toast('User updated.'); document.getElementById('userModal').classList.add('hidden'); loadUsers();
+      });
+    });
+    mkBtn('Adjust stats', '', function () {
+      openModal('Adjust stats', 'Leave a field blank to keep its current value. Level is recomputed from XP.', '<label class="text-sm">High score<input id="modalHS" class="inp" type="number"></label><label class="text-sm">Total XP<input id="modalXP" class="inp" type="number"></label><label class="text-sm">Math solved<input id="modalSolved" class="inp" type="number"></label>' + reasonField(), 'Save', async function () {
+        const v = function (x) { const n = document.getElementById(x).value; return n === '' ? null : parseInt(n, 10); };
+        const rpc = await admin.rpc('admin_adjust_user_stats', { p_user_id: id, p_high_score: v('modalHS'), p_total_xp: v('modalXP'), p_total_math_solved: v('modalSolved'), p_reason: document.getElementById('modalReason').value.trim() });
+        if (rpc.error) { toast(friendlyErr(rpc.error), true); return; }
+        toast('Stats adjusted.'); document.getElementById('userModal').classList.add('hidden'); loadUsers();
+      });
+    });
+    mkBtn('Reset stats', 'btn-red', function () {
+      openModal('Reset stats', 'Zeros all stats and voids all sessions (no hard delete).', typeField('RESET') + reasonField(), 'Reset stats', async function () {
+        if (document.getElementById('modalType').value !== 'RESET') { toast('Type RESET to confirm.', true); return; }
+        const rpc = await admin.rpc('admin_reset_user_stats', { p_user_id: id, p_reason: document.getElementById('modalReason').value.trim() });
+        if (rpc.error) { toast(friendlyErr(rpc.error), true); return; }
+        toast('Stats reset.'); document.getElementById('userModal').classList.add('hidden'); loadUsers();
+      });
+    });
+    mkBtn('Send password reset', '', async function () {
+      const edge = await admin.edge('send_password_reset', { email: d.email });
+      if (edge.error) { toast(friendlyErr(edge.error), true); return; }
+      toast('Password reset email sent (subject to the email rate limit).');
+    });
+    mkBtn('Delete user', 'btn-red', function () {
+      openModal('Delete user', 'Permanently deletes the auth user and cascades to profile, sessions and role. You cannot delete yourself or a superadmin.', typeField('DELETE') + reasonField(), 'Delete user', async function () {
+        if (document.getElementById('modalType').value !== 'DELETE') { toast('Type DELETE to confirm.', true); return; }
+        const edge = await admin.edge('delete_user', { user_id: id });
+        if (edge.error) { toast(friendlyErr(edge.error), true); return; }
+        toast('User deleted.'); document.getElementById('userModal').classList.add('hidden'); loadUsers();
+      });
+    });
+  }
+  document.getElementById('userModal').classList.remove('hidden');
+}
+document.getElementById('userModalClose').addEventListener('click', function () { document.getElementById('userModal').classList.add('hidden'); });
+
+// ---------- Sessions ----------
+let sessPage = 0; const SESS_PAGE_SIZE = 25;
+async function loadSessions() {
+  const r = await admin.rpc('admin_list_sessions', { p_user_id: null, p_flagged_only: document.getElementById('sessFlaggedOnly').checked, p_limit: SESS_PAGE_SIZE, p_offset: sessPage * SESS_PAGE_SIZE });
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  const rows = r.data || [];
+  const total = rows.length ? rows[0].total_count : 0;
+  document.getElementById('sessPageInfo').textContent = 'Page ' + (sessPage + 1) + ' · ' + total + ' sessions';
+  document.getElementById('sessTable').innerHTML = '<table class="tbl"><tr><th>User</th><th>Score</th><th>Correct</th><th>Streak</th><th>Duration</th><th>Date</th><th>Flags</th><th></th></tr>' +
+    rows.map(function (s) {
+      const acc = s.total_asked ? Math.round(s.total_correct / s.total_asked * 100) + '%' : '—';
+      return '<tr><td>' + escapeHtml(s.display_name) + '</td><td>' + s.score + '</td><td>' + s.total_correct + '/' + s.total_asked + ' (' + acc + ')</td><td>' + s.max_streak + '</td><td>' + s.duration_seconds + 's</td><td>' + fmtDate(s.created_at) + '</td><td>' + (s.is_flagged ? '<span class="text-amber-300 font-bold">FLAGGED</span>' : '') + (s.is_voided ? '<br><span class="text-red-400">VOIDED</span>' : '') + '</td>' +
+        '<td><button class="btn" onclick="openSession(\'' + s.id + '\')">Open</button></td></tr>';
+    }).join('') + '</table>';
+}
+document.getElementById('sessRefresh').addEventListener('click', function () { sessPage = 0; loadSessions(); });
+document.getElementById('sessPrev').addEventListener('click', function () { if (sessPage > 0) { sessPage--; loadSessions(); } });
+document.getElementById('sessNext').addEventListener('click', function () { sessPage++; loadSessions(); });
+
+async function openSession(id) {
+  const r = await admin.rpc('admin_get_session', { p_session_id: id });
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  const s = r.data;
+  const body = document.getElementById('sessModalBody');
+  const pre = document.createElement('pre');
+  pre.className = 'font-mono2 text-xs whitespace-pre-wrap break-all mt-2';
+  body.innerHTML = '<p>Score <b>' + s.score + '</b> · ' + s.total_correct + '/' + s.total_asked + ' · max streak ' + s.max_streak + ' · ' + s.duration_seconds + 's · ' + fmtDate(s.created_at) + '</p>' +
+    '<p>Flagged: ' + (s.is_flagged ? 'yes (' + escapeHtml(s.flag_reason) + ')' : 'no') + ' · Voided: ' + (s.is_voided ? 'yes' : 'no') + '</p>' +
+    '<div class="flex gap-2 mt-3">' +
+    '<button class="btn" id="sessFlagBtn">' + (s.is_flagged ? 'Unflag' : 'Flag') + '</button>' +
+    '<button class="btn btn-red" id="sessVoidBtn">Void session</button></div>';
+  pre.textContent = JSON.stringify({ operator_stats: s.operator_stats, config: s.config }, null, 2);
+  body.appendChild(pre);
+  document.getElementById('sessFlagBtn').onclick = function () {
+    openModal(s.is_flagged ? 'Unflag session' : 'Flag session', 'Unflagging recomputes the user profile (the session counts again). Flagging recomputes too (it stops counting).', reasonField(), 'Confirm', async function () {
+      const rpc = await admin.rpc('admin_flag_session', { p_session_id: id, p_flagged: !s.is_flagged, p_reason: document.getElementById('modalReason').value.trim() || null });
+      if (rpc.error) { toast(friendlyErr(rpc.error), true); return; }
+      toast('Session updated.'); document.getElementById('sessModal').classList.add('hidden'); loadSessions();
+    });
+  };
+  document.getElementById('sessVoidBtn').onclick = function () {
+    openModal('Void session', 'Excludes the session from stats and leaderboard and recomputes the user profile.', reasonField(), 'Void session', async function () {
+      const rpc = await admin.rpc('admin_void_session', { p_session_id: id, p_reason: document.getElementById('modalReason').value.trim() });
+      if (rpc.error) { toast(friendlyErr(rpc.error), true); return; }
+      toast('Session voided.'); document.getElementById('sessModal').classList.add('hidden'); loadSessions();
+    });
+  };
+  document.getElementById('sessModal').classList.remove('hidden');
+}
+document.getElementById('sessModalClose').addEventListener('click', function () { document.getElementById('sessModal').classList.add('hidden'); });
+
+// ---------- Leaderboard ----------
+async function loadLeaderboard() {
+  const r = await admin.rpc('get_leaderboard', { p_limit: 50 });
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  document.getElementById('lbTable').innerHTML = '<table class="tbl"><tr><th>#</th><th>User</th><th>Level</th><th>High score</th><th></th></tr>' +
+    (r.data || []).map(function (u) {
+      return '<tr><td>' + u.rank + '</td><td>' + escapeHtml(u.display_name) + '</td><td>' + u.user_level + '</td><td>' + u.high_score + '</td>' +
+        '<td><button class="btn" onclick="openUser(\'' + u.user_id + '\')">Open</button></td></tr>';
+    }).join('') + '</table>';
+  const snaps = await admin.rpc('admin_list_snapshots');
+  document.getElementById('snapList').innerHTML = snaps.error ? '<p class="text-slate-400">Snapshots unavailable: ' + escapeHtml(friendlyErr(snaps.error)) + '</p>' :
+    (snaps.data || []).map(function (s) { return '<p>' + fmtDate(s.taken_at) + ' · <b>' + escapeHtml(s.label) + '</b> · ' + (s.rows ? s.rows.length : 0) + ' rows</p>'; }).join('') || '<p class="text-slate-400">No snapshots yet.</p>';
+}
+document.getElementById('lbRefresh').addEventListener('click', loadLeaderboard);
+
+// ---------- Config ----------
+let cfgData = {};
+function cfgSection(key, title, inner) {
+  return '<div class="border border-white/10 rounded-xl p-4"><h3 class="font-bold">' + title + '</h3><div class="grid md:grid-cols-2 gap-3 mt-3">' + inner + '</div>' +
+    '<button class="btn btn-green mt-3" onclick="saveConfig(\'' + key + '\')">Save ' + key + '</button></div>';
+}
+function numInp(id, val, label) { return '<label class="text-sm">' + label + '<input id="' + id + '" class="inp" type="number" step="any" value="' + escapeHtml(val) + '"></label>'; }
+function boolSel(id, val, label) { return '<label class="text-sm">' + label + '<select id="' + id + '" class="inp"><option value="true"' + (val ? ' selected' : '') + '>On</option><option value="false"' + (!val ? ' selected' : '') + '>Off</option></select></label>'; }
+function txtInp(id, val, label) { return '<label class="text-sm">' + label + '<input id="' + id + '" class="inp" value="' + escapeHtml(val) + '"></label>'; }
+
+async function loadConfig() {
+  const r = await admin.rpc('admin_get_config');
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  cfgData = {};
+  (r.data || []).forEach(function (row) { cfgData[row.key] = row.value; });
+  const c = cfgData;
+  const scoring = c.scoring || {}, timing = c.timing || {}, lb = c.leaderboard || {}, ac = c.anti_cheat || {}, maint = c.maintenance || {}, am = c.auth_methods || {};
+  const tiers = (scoring.combo_tiers || []).map(function (t) { return t.streak + ':' + t.mult; }).join(', ');
+  document.getElementById('cfgForms').innerHTML =
+    cfgSection('maintenance', 'Maintenance mode',
+      boolSel('cfg-maint-enabled', maint.enabled, 'Enabled') + txtInp('cfg-maint-message', maint.message || '', 'Message')) +
+    cfgSection('signups', 'Signups', boolSel('cfg-signups-enabled', (c.signups || {}).enabled, 'Signups enabled')) +
+    cfgSection('guest_play', 'Guest play', boolSel('cfg-guest-enabled', (c.guest_play || {}).enabled, 'Guest play enabled')) +
+    cfgSection('auth_methods', 'Auth methods',
+      boolSel('cfg-auth-google', am.google, 'Google') + boolSel('cfg-auth-email', am.email, 'Email / password')) +
+    cfgSection('scoring', 'Scoring',
+      numInp('cfg-penalty', scoring.wrong_penalty, 'Wrong-answer penalty') +
+      numInp('cfg-bonus-window', scoring.speed_bonus_window_sec, 'Speed bonus window (sec)') +
+      numInp('cfg-bonus-factor', scoring.speed_bonus_factor, 'Speed bonus factor') +
+      txtInp('cfg-tiers', tiers, 'Combo tiers (streak:mult, comma-separated)')) +
+    cfgSection('timing', 'Timing',
+      txtInp('cfg-presets', (timing.presets_minutes || []).join(', '), 'Preset minutes (comma-separated)') +
+      numInp('cfg-max-custom', timing.max_custom_minutes, 'Max custom minutes')) +
+    cfgSection('leaderboard', 'Leaderboard',
+      boolSel('cfg-lb-enabled', lb.enabled, 'Enabled') + numInp('cfg-lb-size', lb.size, 'Size')) +
+    cfgSection('anti_cheat', 'Anti-cheat (internal, never sent to browsers)',
+      numInp('cfg-ac-aps', ac.max_answers_per_sec, 'Max answers / sec') +
+      numInp('cfg-ac-ppc', ac.max_points_per_correct, 'Max points / correct') +
+      numInp('cfg-ac-interval', ac.min_submit_interval_sec, 'Min submit interval (sec)') +
+      numInp('cfg-ac-flag', ac.auto_flag_points_per_correct, 'Auto-flag points / correct') +
+      numInp('cfg-ac-mind', ac.min_duration_sec, 'Min duration (sec)') +
+      numInp('cfg-ac-maxd', ac.max_duration_sec, 'Max duration (sec)'));
+  // Safe-minimum warning (spec 7): 780 = max weight with current slider limits.
+  const maxMult = Math.max.apply(null, (scoring.combo_tiers || [{ mult: 1 }]).map(function (t) { return t.mult; }));
+  const safeMin = 780 * maxMult + (scoring.speed_bonus_factor || 0);
+  const warn = document.getElementById('cfgWarn');
+  warn.textContent = 'Safe minimum for max_points_per_correct with current scoring: ' + safeMin +
+    ' (780 × ' + maxMult + ' + ' + (scoring.speed_bonus_factor || 0) + '). Current cap: ' + (ac.max_points_per_correct || '—') + '.';
+  if ((ac.max_points_per_correct || 0) < safeMin) warn.textContent += ' ⚠ Current cap is BELOW the safe minimum — legitimate high scores may be rejected or auto-flagged.';
+}
+async function saveConfig(key) {
+  const reason = document.getElementById('cfgReason').value.trim();
+  if (!reason) { toast('A reason is required for config saves.', true); return; }
+  const gv = function (id) { return document.getElementById(id).value; };
+  const gb = function (id) { return gv(id) === 'true'; };
+  const gn = function (id) { return parseFloat(gv(id)); };
+  let val = null;
+  if (key === 'maintenance') val = { enabled: gb('cfg-maint-enabled'), message: gv('cfg-maint-message') };
+  if (key === 'signups') val = { enabled: gb('cfg-signups-enabled') };
+  if (key === 'guest_play') val = { enabled: gb('cfg-guest-enabled') };
+  if (key === 'auth_methods') val = { google: gb('cfg-auth-google'), email: gb('cfg-auth-email') };
+  if (key === 'scoring') val = { wrong_penalty: gn('cfg-penalty'), speed_bonus_window_sec: gn('cfg-bonus-window'), speed_bonus_factor: gn('cfg-bonus-factor'),
+    combo_tiers: gv('cfg-tiers').split(',').map(function (p) { const a = p.split(':'); return { streak: parseInt(a[0], 10), mult: parseInt(a[1], 10) }; }).filter(function (t) { return t.streak && t.mult; }) };
+  if (key === 'timing') val = { presets_minutes: gv('cfg-presets').split(',').map(function (p) { return parseInt(p.trim(), 10); }).filter(function (n) { return n > 0; }), max_custom_minutes: gn('cfg-max-custom') };
+  if (key === 'leaderboard') val = { enabled: gb('cfg-lb-enabled'), size: parseInt(gv('cfg-lb-size'), 10) };
+  if (key === 'anti_cheat') val = { max_answers_per_sec: gn('cfg-ac-aps'), max_points_per_correct: gn('cfg-ac-ppc'), min_submit_interval_sec: gn('cfg-ac-interval'), auto_flag_points_per_correct: gn('cfg-ac-flag'), min_duration_sec: gn('cfg-ac-mind'), max_duration_sec: gn('cfg-ac-maxd') };
+  const r = await admin.rpc('admin_set_config', { p_key: key, p_value: val, p_reason: reason });
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  toast('Config saved.' + (r.data ? ' ' + r.data : ''));
+  loadConfig();
+}
+
+// ---------- Announcements ----------
+async function loadAnnouncements() {
+  const r = await admin.rpc('admin_list_announcements');
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  document.getElementById('annList').innerHTML = (r.data || []).map(function (a) {
+    return '<div class="border border-white/10 rounded-xl p-3"><b>' + escapeHtml(a.title) + '</b> <span class="text-xs px-2 py-1 rounded bg-white/10">' + escapeHtml(a.level) + '</span> ' + (a.is_active ? '<span class="text-emerald-300 text-xs">active</span>' : '<span class="text-slate-400 text-xs">inactive</span>') +
+      '<p class="text-sm text-slate-300 mt-1">' + escapeHtml(a.body) + '</p><p class="text-xs text-slate-500">' + fmtDate(a.starts_at) + (a.ends_at ? ' → ' + fmtDate(a.ends_at) : '') + '</p>' +
+      '<div class="flex gap-2 mt-2"><button class="btn" onclick="editAnn(\'' + a.id + '\')">Edit</button><button class="btn btn-red" onclick="delAnn(\'' + a.id + '\')">Delete</button></div></div>';
+  }).join('') || '<p class="text-slate-400">No announcements.</p>';
+  document.getElementById('annPreview').innerHTML = '';
+}
+function editAnn(id) {
+  admin.rpc('admin_list_announcements').then(function (r) {
+    const a = (r.data || []).find(function (x) { return x.id === id; });
+    if (!a) return;
+    document.getElementById('annId').value = a.id;
+    document.getElementById('annTitle').value = a.title;
+    document.getElementById('annBody').value = a.body;
+    document.getElementById('annLevel').value = a.level;
+    document.getElementById('annActive').checked = a.is_active;
+    document.getElementById('annStarts').value = a.starts_at ? a.starts_at.slice(0, 16) : '';
+    document.getElementById('annEnds').value = a.ends_at ? a.ends_at.slice(0, 16) : '';
+    previewAnn();
+  });
+}
+function delAnn(id) {
+  openModal('Delete announcement', '', reasonField(), 'Delete', async function () {
+    const r = await admin.rpc('admin_delete_announcement', { p_id: id, p_reason: document.getElementById('modalReason').value.trim() || null });
+    if (r.error) { toast(friendlyErr(r.error), true); return; }
+    toast('Announcement deleted.'); loadAnnouncements();
+  });
+}
+function previewAnn() {
+  const t = document.getElementById('annTitle').value, b = document.getElementById('annBody').value, lvl = document.getElementById('annLevel').value;
+  const colors = { info: 'bg-sky-500/20 text-sky-200', success: 'bg-emerald-500/20 text-emerald-200', warning: 'bg-amber-500/20 text-amber-200', critical: 'bg-red-500/20 text-red-200' };
+  document.getElementById('annPreview').innerHTML = t || b ? '<div class="p-3 rounded-xl ' + (colors[lvl] || colors.info) + '"><b>' + escapeHtml(t) + '</b><p class="text-sm">' + escapeHtml(b) + '</p></div>' : '';
+}
+['annTitle', 'annBody', 'annLevel'].forEach(function (id) { document.getElementById(id).addEventListener('input', previewAnn); });
+document.getElementById('annSave').addEventListener('click', async function () {
+  const id = document.getElementById('annId').value || null;
+  const r = await admin.rpc('admin_save_announcement', {
+    p_id: id, p_title: document.getElementById('annTitle').value.trim(), p_body: document.getElementById('annBody').value.trim(),
+    p_level: document.getElementById('annLevel').value, p_is_active: document.getElementById('annActive').checked,
+    p_starts_at: document.getElementById('annStarts').value ? new Date(document.getElementById('annStarts').value).toISOString() : null,
+    p_ends_at: document.getElementById('annEnds').value ? new Date(document.getElementById('annEnds').value).toISOString() : null,
+    p_reason: null });
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  toast('Announcement saved.'); document.getElementById('annId').value = ''; loadAnnouncements();
+});
+document.getElementById('annClear').addEventListener('click', function () {
+  ['annId', 'annTitle', 'annBody', 'annStarts', 'annEnds'].forEach(function (id) { document.getElementById(id).value = ''; });
+  document.getElementById('annPreview').innerHTML = '';
+});
+
+// ---------- Audit ----------
+let auditPage = 0; const AUDIT_PAGE_SIZE = 25;
+async function loadAudit() {
+  const r = await admin.rpc('admin_list_audit', {
+    p_actor: document.getElementById('auditActor').value.trim() || null,
+    p_action: document.getElementById('auditAction').value || null,
+    p_target_type: null, p_from: null, p_to: null,
+    p_limit: AUDIT_PAGE_SIZE, p_offset: auditPage * AUDIT_PAGE_SIZE });
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  const rows = r.data || [];
+  const total = rows.length ? rows[0].total_count : 0;
+  document.getElementById('auditPageInfo').textContent = 'Page ' + (auditPage + 1) + ' · ' + total + ' entries';
+  document.getElementById('auditTable').innerHTML = '<table class="tbl"><tr><th>Time</th><th>Action</th><th>Actor role</th><th>Target</th><th>Reason</th><th>Details</th></tr>' +
+    rows.map(function (a, i) {
+      return '<tr><td>' + fmtDate(a.created_at) + '</td><td><b>' + escapeHtml(a.action) + '</b></td><td>' + escapeHtml(a.actor_role) + '</td><td>' + escapeHtml(a.target_type) + ' ' + escapeHtml(a.target_id) + '</td><td>' + escapeHtml(a.reason) + '</td>' +
+        '<td><button class="btn" onclick="document.getElementById(\'auditDetail' + i + '\').classList.toggle(\'hidden\')">Show</button><pre id="auditDetail' + i + '" class="hidden font-mono2 text-xs whitespace-pre-wrap break-all mt-2"></pre></td></tr>';
+    }).join('') + '</table>';
+  rows.forEach(function (a, i) { const el = document.getElementById('auditDetail' + i); if (el) el.textContent = JSON.stringify(a.details || {}, null, 2); });
+}
+document.getElementById('auditSearch').addEventListener('click', function () { auditPage = 0; loadAudit(); });
+document.getElementById('auditPrev').addEventListener('click', function () { if (auditPage > 0) { auditPage--; loadAudit(); } });
+document.getElementById('auditNext').addEventListener('click', function () { auditPage++; loadAudit(); });
+
+// ---------- Admins ----------
+async function loadAdmins() {
+  const r = await admin.rpc('admin_list_admins');
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  document.getElementById('adminList').innerHTML = (r.data || []).map(function (a) {
+    return '<div class="border border-white/10 rounded-xl p-3 flex flex-wrap gap-2 items-center justify-between"><p><b>' + escapeHtml(a.email) + '</b> · <span class="text-emerald-300 font-bold">' + escapeHtml(a.role) + '</span> · since ' + fmtDate(a.created_at) + '</p>' +
+      '<div class="flex gap-2">' +
+      '<button class="btn" onclick="changeRole(\'' + a.user_id + '\',\'' + (a.role === 'superadmin' ? 'admin' : 'superadmin') + '\')">Make ' + (a.role === 'superadmin' ? 'admin' : 'superadmin') + '</button>' +
+      '<button class="btn btn-red" onclick="revokeRole(\'' + a.user_id + '\')">Revoke</button></div></div>';
+  }).join('') || '<p class="text-slate-400">No admins.</p>';
+}
+async function findUserIdByEmail(email) {
+  const r = await admin.rpc('admin_list_users', { p_search: email, p_status: 'all', p_sort: 'created_at', p_dir: 'desc', p_limit: 10, p_offset: 0 });
+  if (r.error) return null;
+  const hit = (r.data || []).find(function (u) { return (u.email || '').toLowerCase() === email.toLowerCase(); });
+  return hit ? hit.id : null;
+}
+document.getElementById('grantBtn').addEventListener('click', async function () {
+  const email = document.getElementById('grantEmail').value.trim(), role = document.getElementById('grantRole').value, reason = document.getElementById('grantReason').value.trim();
+  if (!email || !reason) { toast('Email and reason are required.', true); return; }
+  const uid = await findUserIdByEmail(email);
+  if (!uid) { toast('No existing user with that email — the user must sign up to the game first.', true); return; }
+  const r = await admin.rpc('admin_set_role', { p_user_id: uid, p_role: role, p_reason: reason });
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  toast('Role granted.'); loadAdmins();
+});
+async function changeRole(uid, role) {
+  openModal('Change role', 'Changing to ' + role + '. Self-demotion and removing the last superadmin are refused server-side.', reasonField(), 'Change role', async function () {
+    const r = await admin.rpc('admin_set_role', { p_user_id: uid, p_role: role, p_reason: document.getElementById('modalReason').value.trim() });
+    if (r.error) { toast(friendlyErr(r.error), true); return; }
+    toast('Role changed.'); loadAdmins();
+  });
+}
+async function revokeRole(uid) {
+  openModal('Revoke role', 'Removes all admin access for this user.', reasonField(), 'Revoke', async function () {
+    const r = await admin.rpc('admin_set_role', { p_user_id: uid, p_role: null, p_reason: document.getElementById('modalReason').value.trim() });
+    if (r.error) { toast(friendlyErr(r.error), true); return; }
+    toast('Role revoked.'); loadAdmins();
+  });
+}
+
+// ---------- Danger zone ----------
+document.getElementById('exportUsers').addEventListener('click', async function () {
+  const r = await admin.rpc('admin_export_users_csv');
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  download('think-fast-users.csv', r.data); toast('Users CSV downloaded (export audited).');
+});
+document.getElementById('exportSessions').addEventListener('click', async function () {
+  const r = await admin.rpc('admin_export_sessions_csv', { p_from: null, p_to: null });
+  if (r.error) { toast(friendlyErr(r.error), true); return; }
+  download('think-fast-sessions.csv', r.data); toast('Sessions CSV downloaded (export audited).');
+});
+document.getElementById('resetSeasonBtn').addEventListener('click', function () {
+  const label = document.getElementById('resetLabel').value.trim(), reason = document.getElementById('resetReason').value.trim();
+  if (!label || !reason) { toast('Snapshot label and reason are required.', true); return; }
+  openModal('Reset season', 'This snapshots the top 100 as "' + label + '", then sets every high_score to 0. XP/levels stay.', typeField('RESET'), 'Reset season', async function () {
+    if (document.getElementById('modalType').value !== 'RESET') { toast('Type RESET to confirm.', true); return; }
+    const r = await admin.rpc('admin_reset_leaderboard', { p_label: label, p_reason: reason });
+    if (r.error) { toast(friendlyErr(r.error), true); return; }
+    toast('Season reset (snapshot taken first).');
+  });
+});
+
+gate();
+</script>
+</body>
+</html>

@@ -235,7 +235,7 @@
                 <i class="fa-solid fa-xmark"></i>
             </button>
             <h3 class="font-display font-bold text-lg text-white">ACCOUNT</h3>
-            <button onclick="window.app && window.app.handleGoogle()" class="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-mono text-xs font-bold transition-all">
+            <button id="googleBtn" onclick="window.app && window.app.handleGoogle()" class="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-mono text-xs font-bold transition-all">
                 Continue with Google
             </button>
             <div class="flex gap-2">
@@ -289,6 +289,14 @@
             </div>
         </div>
     </header>
+    <div id="annBanner" class="max-w-5xl mx-auto w-full px-4 pt-4 hidden"></div>
+    <div id="maintBadgeGame" class="max-w-5xl mx-auto w-full px-4 pt-4 hidden"><p class="text-xs font-mono text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">Maintenance mode is active (admin bypass — you can still play).</p></div>
+    <div id="maintOverlay" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/85 px-6">
+        <div class="glass-panel p-8 max-w-md text-center">
+            <h2 class="font-display font-black text-2xl text-white">UNDER MAINTENANCE</h2>
+            <p id="maintMsg" class="text-slate-300 mt-3">We are upgrading Think Fast. Back soon!</p>
+        </div>
+    </div>
 
     <main class="max-w-5xl mx-auto w-full px-4 py-8 flex-grow flex flex-col relative">
 
@@ -560,7 +568,7 @@
             </div>
 
             <!-- Global Leaderboard (DB-backed, top 10 + my rank) -->
-            <div class="glass-panel p-5 sm:p-6 space-y-4 border-gold/20">
+            <div id="leaderboardSection" class="glass-panel p-5 sm:p-6 space-y-4 border-gold/20">
                 <div class="flex items-center justify-between">
                     <h3 class="font-display font-bold text-lg text-white tracking-wide">GLOBAL LEADERBOARD</h3>
                     <button onclick="window.app && window.app.fetchLeaderboard()" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white font-mono text-xs font-bold">Refresh</button>
@@ -824,6 +832,18 @@
                 if (!this.client) return this._noBackend();
                 return this._wrap(this.client.rpc('get_my_rank'));
             }
+            async getPublicConfig() {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.rpc('get_public_config'));
+            }
+            async getAnnouncements() {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.rpc('get_active_announcements'));
+            }
+            async isAdmin() {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.rpc('is_admin'));
+            }
             async getRecentSessions(n) {
                 if (!this.client) return this._noBackend();
                 return this._wrap(this.client.from('game_sessions').select('id,score,total_asked,total_correct,max_streak,created_at').order('created_at', { ascending: false }).limit(n || 10));
@@ -969,6 +989,11 @@
                 this.backend = new BackendService();
                 this.currentUser = null;
                 this.profile = null;
+                // Remote config (admin panel) — built-in defaults apply until it loads.
+                this.remoteConfig = null;
+                this.isAdminUser = false;
+                this.scoring = { wrong_penalty: 50, speed_bonus_window_sec: 3.0, speed_bonus_factor: 40,
+                    combo_tiers: [{ streak: 5, mult: 2 }, { streak: 10, mult: 3 }, { streak: 15, mult: 5 }] };
 
                 // Configuration State
                 this.config = {
@@ -1075,10 +1100,12 @@
                             self.profile = prof.data || null;
                             self.updateAuthUI();
                             self.fetchLeaderboard();
+                            self.loadRemoteConfig();
                         });
                     }
                     self.updateAuthUI();
                     self.fetchLeaderboard();
+                    self.loadRemoteConfig();
                 }).catch(function (e) {
                     console.warn('Backend init error (guest mode):', e);
                     self.updateAuthUI();
@@ -1243,13 +1270,103 @@
                 const el = document.getElementById('syncBanner');
                 if (el) el.textContent = text || '';
             }
+            async loadRemoteConfig() {
+                const self = this;
+                function withTimeout(promise) {
+                    return Promise.race([promise, new Promise(function (res) { setTimeout(function () { res({ data: null, error: { message: 'timeout' } }); }, 3000); })]);
+                }
+                try {
+                    const cfg = await withTimeout(this.backend.getPublicConfig());
+                    if (cfg.data) { this.remoteConfig = cfg.data; this.applyRemoteConfig(); }
+                    const ann = await withTimeout(this.backend.getAnnouncements());
+                    if (ann.data) this.renderAnnouncements(ann.data);
+                    if (this.currentUser) {
+                        const adm = await this.backend.isAdmin();
+                        this.isAdminUser = !!adm.data;
+                        if (this.remoteConfig) this.applyRemoteConfig();
+                    }
+                } catch (e) { /* config failure: game keeps built-in defaults */ }
+            }
+            applyRemoteConfig() {
+                const c = this.remoteConfig || {};
+                const maint = c.maintenance || {};
+                const overlay = document.getElementById('maintOverlay');
+                const badge = document.getElementById('maintBadgeGame');
+                if (maint.enabled && !this.isAdminUser) {
+                    if (overlay) { overlay.classList.remove('hidden'); overlay.classList.add('flex'); }
+                    const msg = document.getElementById('maintMsg');
+                    if (msg) msg.textContent = maint.message || 'We are upgrading Think Fast. Back soon!';
+                } else {
+                    if (overlay) { overlay.classList.add('hidden'); overlay.classList.remove('flex'); }
+                    if (badge) badge.classList.toggle('hidden', !(maint.enabled && this.isAdminUser));
+                }
+                if (c.scoring) {
+                    const sc = c.scoring;
+                    if (typeof sc.wrong_penalty === 'number') this.scoring.wrong_penalty = sc.wrong_penalty;
+                    if (typeof sc.speed_bonus_window_sec === 'number') this.scoring.speed_bonus_window_sec = sc.speed_bonus_window_sec;
+                    if (typeof sc.speed_bonus_factor === 'number') this.scoring.speed_bonus_factor = sc.speed_bonus_factor;
+                    if (Array.isArray(sc.combo_tiers) && sc.combo_tiers.length) this.scoring.combo_tiers = sc.combo_tiers.slice().sort(function (a, b) { return b.streak - a.streak; });
+                }
+                if (c.timing && Array.isArray(c.timing.presets_minutes) && c.timing.presets_minutes.length) {
+                    const wrap = document.getElementById('timePresets');
+                    const custom = document.getElementById('customMinutesInput');
+                    if (wrap) {
+                        const btns = wrap.querySelectorAll('.time-btn');
+                        btns.forEach(function (b) { b.remove(); });
+                        const self = this;
+                        c.timing.presets_minutes.forEach(function (m) {
+                            const b = document.createElement('button');
+                            b.className = 'time-btn px-3 py-2.5 rounded-xl border border-white/10 bg-white/5 font-mono text-sm font-bold hover:border-cyan transition-all';
+                            b.setAttribute('data-time', String(m));
+                            b.textContent = m + 'm';
+                            b.onclick = function () { self.setLimit(m); };
+                            wrap.insertBefore(b, wrap.firstChild);
+                        });
+                    }
+                    if (custom && c.timing.max_custom_minutes) custom.max = String(c.timing.max_custom_minutes);
+                }
+                if (c.signups && c.signups.enabled === false) {
+                    const tab = document.getElementById('authTabSignUp');
+                    if (tab) tab.classList.add('hidden');
+                }
+                if (c.auth_methods && c.auth_methods.google === false) {
+                    const g = document.getElementById('googleBtn');
+                    if (g) g.classList.add('hidden');
+                }
+                if (c.leaderboard && c.leaderboard.enabled === false) {
+                    const sec = document.getElementById('leaderboardSection');
+                    if (sec) sec.classList.add('hidden');
+                }
+            }
+            renderAnnouncements(list) {
+                const wrap = document.getElementById('annBanner');
+                if (!wrap) return;
+                const shown = (list || []).filter(function (a) { return !sessionStorage.getItem('tf-ann-dismiss-' + a.id); });
+                if (!shown.length) { wrap.classList.add('hidden'); wrap.innerHTML = ''; return; }
+                const colors = { info: 'bg-sky-500/15 border-sky-500/30 text-sky-200', success: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-200', warning: 'bg-amber-500/15 border-amber-500/30 text-amber-200', critical: 'bg-red-500/15 border-red-500/30 text-red-200' };
+                const self = this;
+                wrap.innerHTML = '';
+                shown.forEach(function (a) {
+                    const d = document.createElement('div');
+                    d.className = 'flex items-start justify-between gap-3 border rounded-xl px-4 py-3 text-sm ' + (colors[a.level] || colors.info);
+                    const t = document.createElement('div');
+                    const b = document.createElement('b'); b.textContent = a.title; t.appendChild(b);
+                    const p = document.createElement('p'); p.textContent = a.body; t.appendChild(p);
+                    const x = document.createElement('button'); x.textContent = '✕'; x.className = 'font-bold';
+                    x.onclick = function () { try { sessionStorage.setItem('tf-ann-dismiss-' + a.id, '1'); } catch (e) {} self.renderAnnouncements(list); };
+                    d.appendChild(t); d.appendChild(x); wrap.appendChild(d);
+                });
+                wrap.classList.remove('hidden');
+            }
             async fetchLeaderboard() {
                 const listEl = document.getElementById('leaderboardList');
                 const rankEl = document.getElementById('myRankRow');
                 if (!listEl) return;
                 listEl.innerHTML = '<li>Loading leaderboard...</li>';
                 if (rankEl) rankEl.textContent = '';
-                const res = await this.backend.getLeaderboard(10);
+                const lbCfg = (this.remoteConfig && this.remoteConfig.leaderboard) || {};
+                if (lbCfg.enabled === false) { listEl.innerHTML = '<li>Leaderboard is disabled.</li>'; return; }
+                const res = await this.backend.getLeaderboard(lbCfg.size || 10);
                 if (res.error || !res.data) {
                     listEl.innerHTML = '<li>Leaderboard unavailable</li>';
                     return;
@@ -1284,7 +1401,9 @@
                 const res = await this.backend.submitSession(payload);
                 if (res.error) {
                     const msg = String((res.error && res.error.message) || '');
-                    const finalErrors = ['rate_limited', 'too_fast', 'score_too_high'];
+                    const finalErrors = ['rate_limited', 'too_fast', 'score_too_high', 'banned', 'maintenance'];
+                    if (msg.indexOf('banned') !== -1) this.showSyncBanner('Your account is suspended — scores will not sync.');
+                    else if (msg.indexOf('maintenance') !== -1) this.showSyncBanner('Maintenance in progress — score not synced.');
                     if (!isRetry && !finalErrors.some(function (e) { return msg.indexOf(e) !== -1; })) {
                         const self = this;
                         setTimeout(function () { self.syncSessionToServer(roundScore, stats, true); }, 3000);
@@ -1448,6 +1567,14 @@
                 const enabledOps = Object.keys(this.config.operators).filter(k => this.config.operators[k].enabled);
                 if (enabledOps.length === 0) {
                     document.getElementById('operatorError').classList.remove('hidden');
+                    return;
+                }
+                if (this.remoteConfig && this.remoteConfig.maintenance && this.remoteConfig.maintenance.enabled && !this.isAdminUser) {
+                    this.applyRemoteConfig();
+                    return;
+                }
+                if (this.remoteConfig && this.remoteConfig.guest_play && this.remoteConfig.guest_play.enabled === false && !this.currentUser) {
+                    this.showSyncBanner('Login required to play — guest play is turned off.');
                     return;
                 }
 
@@ -1685,11 +1812,10 @@
                     }
 
                     let mult = 1;
-                    if (this.state.streak >= 15) mult = 5;
-                    else if (this.state.streak >= 10) mult = 3;
-                    else if (this.state.streak >= 5) mult = 2;
+                    const tiers = (this.scoring.combo_tiers || []).slice().sort(function (a, b) { return b.streak - a.streak; });
+                    for (let i = 0; i < tiers.length; i++) { if (this.state.streak >= tiers[i].streak) { mult = tiers[i].mult; break; } }
 
-                    const speedBonus = Math.max(0, Math.floor((3.0 - timeTaken) * 40));
+                    const speedBonus = Math.max(0, Math.floor((this.scoring.speed_bonus_window_sec - timeTaken) * this.scoring.speed_bonus_factor));
                     const gainedPoints = (q.weight * mult) + speedBonus;
                     this.state.score += gainedPoints;
 
@@ -1708,7 +1834,7 @@
                 } else {
                     this.state.stats.totalMistakes++;
                     this.state.streak = 0;
-                    const penalty = 50;
+                    const penalty = this.scoring.wrong_penalty;
                     this.state.score = Math.max(0, this.state.score - penalty);
 
                     this.audio.playError();
