@@ -95,6 +95,16 @@ environment. The key value is never in code, git, chat, or the panel.
 - **Session detail** needs `admin_get_session` and **snapshots list** needs
   `admin_list_snapshots` — both are in `supabase/admin_migration.sql`
   (patch 1, appended at the end) and were run after the first migration.
+- **Patch 2 (2026-11-04, after the panel retest):** `admin_list_users`
+  now casts every column to its declared type and qualifies the sort
+  column — the first version returned "structure of query does not match
+  function result type" on every Users load. All FKs from public tables
+  to `auth.users` that lacked an `ON DELETE` action (roles `granted_by`,
+  audit `actor_id`, config `updated_by`, announcements `created_by`,
+  snapshots `taken_by`) are now `ON DELETE SET NULL`, so deleting an
+  admin user no longer fails with "Database error deleting user". Audit
+  rows are kept when their actor is deleted; only `actor_id` becomes
+  NULL (audit content is never deleted by a user delete).
 
 ## Files
 
