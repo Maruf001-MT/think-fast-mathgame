@@ -1180,10 +1180,15 @@
                 if (modal) modal.classList.add('hidden');
             }
             switchAuthTab(tab) {
-                ['signin', 'signup', 'forgot'].forEach(function (t) {
-                    const panel = document.getElementById('authPanel' + t.charAt(0).toUpperCase() + t.slice(1));
+                const ids = {
+                    signin: ['authTabSignIn', 'authPanelSignIn'],
+                    signup: ['authTabSignUp', 'authPanelSignUp'],
+                    forgot: ['authTabForgot', 'authPanelForgot']
+                };
+                Object.keys(ids).forEach(function (t) {
+                    const panel = document.getElementById(ids[t][1]);
                     if (panel) panel.classList.toggle('hidden', t !== tab);
-                    const btn = document.getElementById('authTab' + t.charAt(0).toUpperCase() + t.slice(1));
+                    const btn = document.getElementById(ids[t][0]);
                     if (btn) btn.className = t === tab
                         ? 'flex-1 py-2 rounded-lg bg-cyan/20 border border-cyan/40 text-cyan font-mono text-xs font-bold'
                         : 'flex-1 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 font-mono text-xs font-bold';
