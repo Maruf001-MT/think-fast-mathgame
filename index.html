@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="en" class="dark h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Think Fast // Neo-Arcade Calculation Engine</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter, JetBrains Mono & Orbitron -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;0,800;1,700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        obsidian: '#0D0F12',
+                        'obsidian-card': '#141820',
+                        'obsidian-border': 'rgba(255, 255, 255, 0.08)',
+                        emerald: '#00FF9D',
+                        violet: '#8A2BE2',
+                        cyan: '#00F0FF',
+                        coral: '#FF3366',
+                        gold: '#FFD700'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                        display: ['Orbitron', 'sans-serif']
+                    },
+                    boxShadow: {
+                        'neon-cyan': '0 0 20px rgba(0, 240, 255, 0.35)',
+                        'neon-emerald': '0 0 20px rgba(0, 255, 157, 0.35)',
+                        'neon-violet': '0 0 20px rgba(138, 43, 226, 0.35)',
+                        'neon-coral': '0 0 20px rgba(255, 51, 102, 0.35)',
+                        'glass-inset': 'inset 0 1px 1px rgba(255, 255, 255, 0.15)'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        html, body {
+            min-height: 100%;
+            background-color: #0D0F12;
+            color: #E2E8F0;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+        }
+
+        .grid-bg {
+            background-size: 40px 40px;
+            background-image:
+                linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-attachment: fixed;
+        }
+
+        .glass-panel {
+            background: rgba(20, 24, 32, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1.25rem;
+        }
+
+        .glass-tile {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-tile:hover {
+            border-color: rgba(0, 240, 255, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 240, 255, 0.2);
+        }
+
+        .glass-tile:active {
+            transform: translateY(1px);
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-12px); }
+            40% { transform: translateX(12px); }
+            60% { transform: translateX(-8px); }
+            80% { transform: translateX(8px); }
+        }
+        .animate-shake {
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes redPulse {
+            0% { background-color: rgba(255, 51, 102, 0); }
+            30% { background-color: rgba(255, 51, 102, 0.25); }
+            100% { background-color: rgba(255, 51, 102, 0); }
+        }
+        .damage-flash {
+            animation: redPulse 0.35s ease-out forwards;
+        }
+
+        @keyframes floatUpFade {
+            0% { opacity: 1; transform: translateY(0) scale(0.9); }
+            50% { opacity: 1; transform: translateY(-30px) scale(1.1); }
+            100% { opacity: 0; transform: translateY(-60px) scale(1); }
+        }
+        .floating-popup {
+            position: absolute;
+            pointer-events: none;
+            animation: floatUpFade 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            z-index: 50;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0D0F12;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 240, 255, 0.4);
+        }
+
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #00FF9D;
+        }
+        .toggle-checkbox:checked + .toggle-label .toggle-ball {
+            transform: translateX(100%);
+            background-color: #0D0F12;
+        }
+    </style>
+</head>
+<body class="min-h-screen grid-bg flex flex-col selection:bg-cyan selection:text-black">
+
+    <!-- Canvas layer for micro particle explosions -->
+    <canvas id="particleCanvas" class="fixed inset-0 pointer-events-none z-40 w-full h-full"></canvas>
+
+    <!-- Visual damage flash overlay -->
+    <div id="damageOverlay" class="fixed inset-0 pointer-events-none z-30 transition-opacity"></div>
+
+    <!-- Floating Popups Container -->
+    <div id="popupContainer" class="fixed inset-0 pointer-events-none z-50 overflow-hidden"></div>
+
+    <!-- Player Stats Modal (local data only) -->
+    <div id="dashboardModal" class="fixed inset-0 bg-obsidian/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-md p-6 relative border-cyan/30 shadow-neon-cyan space-y-6">
+            <button onclick="window.app && window.app.closeDashboardModal()" class="absolute top-4 right-4 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <div class="flex items-center gap-4 border-b border-white/10 pb-4">
+                <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan via-violet to-emerald flex items-center justify-center border-2 border-cyan shadow-neon-cyan">
+                    <i class="fa-solid fa-user-astronaut text-obsidian text-2xl"></i>
+                </div>
+                <div class="space-y-1">
+                    <h3 class="font-display font-bold text-lg text-white">Local Operator</h3>
+                    <p class="font-mono text-xs text-slate-400">Stats saved on this device</p>
+                    <span id="dashLevel" class="inline-block px-2.5 py-0.5 rounded-full bg-emerald/20 border border-emerald/40 text-emerald font-mono font-bold text-[10px]">LEVEL 1</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div class="bg-white/5 border border-white/10 rounded-xl p-2.5 text-center space-y-0.5">
+                    <span class="block text-[8px] sm:text-[9px] font-mono text-slate-400 uppercase">HIGH SCORE</span>
+                    <span id="dashHighScore" class="font-display font-black text-sm sm:text-base text-cyan">0</span>
+                </div>
+                <div class="bg-white/5 border border-white/10 rounded-xl p-2.5 text-center space-y-0.5">
+                    <span class="block text-[8px] sm:text-[9px] font-mono text-slate-400 uppercase">MATH SOLVED</span>
+                    <span id="dashTotalSolved" class="font-display font-black text-sm sm:text-base text-gold">0</span>
+                </div>
+                <div class="bg-white/5 border border-white/10 rounded-xl p-2.5 text-center space-y-0.5">
+                    <span class="block text-[8px] sm:text-[9px] font-mono text-slate-400 uppercase">TOTAL XP</span>
+                    <span id="dashXp" class="font-display font-black text-sm sm:text-base text-emerald">0 XP</span>
+                </div>
+                <div class="bg-white/5 border border-white/10 rounded-xl p-2.5 text-center space-y-0.5">
+                    <span class="block text-[8px] sm:text-[9px] font-mono text-slate-400 uppercase">SESSIONS</span>
+                    <span id="dashSessions" class="font-display font-black text-sm sm:text-base text-violet">0</span>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <div class="flex justify-between items-center font-mono text-xs">
+                    <span class="text-slate-400">LEVEL PROGRESS</span>
+                    <span id="dashProgressText" class="text-cyan font-bold">0 / 100,000 XP to Level 2</span>
+                </div>
+                <div class="w-full h-3 bg-slate-800 rounded-full overflow-hidden border border-white/10 p-0.5">
+                    <div id="dashProgressBar" class="h-full bg-gradient-to-r from-cyan via-emerald to-violet rounded-full transition-all duration-500 w-0 shadow-neon-cyan"></div>
+                </div>
+            </div>
+
+            <div class="pt-2">
+                <button onclick="window.app && window.app.closeDashboardModal()" class="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-mono text-xs font-bold transition-all">
+                    CLOSE
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <header class="w-full border-b border-white/10 bg-obsidian-card/80 backdrop-blur-md px-4 py-3 sticky top-0 z-20">
+        <div class="max-w-6xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="window.app && window.app.showSetup()">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan via-violet to-emerald flex items-center justify-center shadow-neon-cyan">
+                    <i class="fa-solid fa-bolt text-obsidian text-xl font-extrabold"></i>
+                </div>
+                <div>
+                    <h1 class="font-display font-black text-base sm:text-lg tracking-wider text-white">THINK <span class="text-cyan">FAST</span></h1>
+                    <p class="text-[10px] font-mono text-slate-400 -mt-1 hidden sm:block">NEO-ARCADE ENGINE</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3 sm:gap-4">
+                <button id="statsBtn" onclick="window.app && window.app.openDashboardModal()" class="w-10 h-10 rounded-xl glass-tile flex items-center justify-center text-gold hover:scale-105 transition-all" title="My Stats">
+                    <i class="fa-solid fa-chart-simple text-lg"></i>
+                </button>
+                <button id="soundToggleBtn" onclick="window.app && window.app.toggleSound()" class="w-10 h-10 rounded-xl glass-tile flex items-center justify-center text-slate-300 hover:text-cyan transition-colors" title="Toggle Audio FX">
+                    <i class="fa-solid fa-volume-high text-lg" id="soundIcon"></i>
+                </button>
+                <div class="hidden sm:flex items-center gap-2 font-mono text-xs text-slate-400 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
+                    <span class="w-2 h-2 rounded-full bg-emerald animate-pulse"></span>
+                    <span>READY TO PLAY</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto w-full px-4 py-8 flex-grow flex flex-col relative">
+
+        <!-- Setup Screen -->
+        <section id="setupScreen" class="w-full space-y-6">
+            <div class="text-center space-y-2 mb-4">
+                <h2 class="text-3xl sm:text-4xl font-display font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan via-emerald to-violet">
+                    SESSION CONFIGURATION
+                </h2>
+                <p class="text-sm text-slate-400 max-w-lg mx-auto">
+                    Customize operator constraints, duration, and digit ranges. Higher difficulties scale base point multipliers.
+                </p>
+            </div>
+
+            <!-- Global Controls Card -->
+            <div class="glass-panel p-5 sm:p-6 space-y-5 border-cyan/20">
+                <div class="flex items-center gap-3 border-b border-white/10 pb-3">
+                    <i class="fa-solid fa-sliders text-cyan text-xl"></i>
+                    <h3 class="font-display font-bold text-lg text-white tracking-wide">GLOBAL SESSION TIMING</h3>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                    <div>
+                        <label class="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-2">
+                            Session Duration Limit (Minutes)
+                        </label>
+                        <div class="flex flex-wrap items-center gap-2" id="timePresets">
+                            <button onclick="window.app && window.app.setLimit(3)" class="time-btn px-3 py-2.5 rounded-xl border border-white/10 bg-white/5 font-mono text-sm font-bold hover:border-cyan transition-all" data-time="3">3m</button>
+                            <button onclick="window.app && window.app.setLimit(5)" class="time-btn px-3 py-2.5 rounded-xl border border-cyan bg-cyan/10 font-mono text-sm font-bold text-cyan shadow-neon-cyan transition-all" data-time="5">5m</button>
+                            <button onclick="window.app && window.app.setLimit(10)" class="time-btn px-3 py-2.5 rounded-xl border border-white/10 bg-white/5 font-mono text-sm font-bold hover:border-cyan transition-all" data-time="10">10m</button>
+                            <button onclick="window.app && window.app.setLimit(30)" class="time-btn px-3 py-2.5 rounded-xl border border-white/10 bg-white/5 font-mono text-sm font-bold hover:border-cyan transition-all" data-time="30">30m</button>
+
+                            <div class="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl px-3 py-2 focus-within:border-cyan transition-all">
+                                <input type="number" id="customMinutesInput" min="1" max="180" placeholder="Custom" oninput="window.app && window.app.setCustomLimit(this.value)" class="w-16 bg-transparent text-sm font-mono font-bold text-white outline-none placeholder-slate-500">
+                                <span class="text-xs font-mono text-slate-400">min</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-obsidian/60 p-4 rounded-xl border border-white/5 flex items-center justify-between">
+                        <div>
+                            <span class="block text-xs font-mono text-slate-400">ESTIMATED DIFFICULTY</span>
+                            <span id="globalDifficultyBadge" class="font-display font-black text-emerald text-lg">1.2x SCORE MULTIPLIER</span>
+                        </div>
+                        <i class="fa-solid fa-shield-halved text-2xl text-emerald"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h3 class="font-display font-bold text-base text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-calculator text-emerald"></i> Operator Rules & Difficulty Controls
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="operatorCardsContainer">
+
+                    <!-- Addition Card -->
+                    <div class="glass-panel p-5 sm:p-6 flex flex-col justify-between space-y-5 border-emerald/20 hover:border-emerald/40 transition-all" id="card-add">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-lg bg-emerald/20 text-emerald flex items-center justify-center font-mono font-bold text-xl">
+                                    +
+                                </div>
+                                <span class="font-display font-bold text-white">ADDITION</span>
+                            </div>
+                            <div class="relative inline-block w-11 h-6 align-middle select-none">
+                                <input type="checkbox" id="toggle-add" class="toggle-checkbox absolute opacity-0 w-0 h-0" checked onchange="window.app && window.app.updateConfig('add')">
+                                <label for="toggle-add" class="toggle-label block overflow-hidden h-6 rounded-full bg-slate-700 cursor-pointer transition-colors duration-200">
+                                    <span class="toggle-ball block w-4 h-4 m-1 rounded-full bg-white transition-transform duration-200"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                    <span>1st Num Digits:</span>
+                                    <span id="label-add-range1" class="text-emerald font-bold">2 Digits</span>
+                                </div>
+                                <input type="range" id="range-add-1" min="1" max="3" value="2" step="1" oninput="window.app && window.app.updateConfig('add')" class="w-full accent-emerald bg-slate-800 rounded-lg cursor-pointer h-2">
+                            </div>
+
+                            <div>
+                                <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                    <span>2nd Num Digits:</span>
+                                    <span id="label-add-range2" class="text-emerald font-bold">2 Digits</span>
+                                </div>
+                                <input type="range" id="range-add-2" min="1" max="3" value="2" step="1" oninput="window.app && window.app.updateConfig('add')" class="w-full accent-emerald bg-slate-800 rounded-lg cursor-pointer h-2">
+                            </div>
+
+                            <div class="flex items-center justify-between text-xs font-mono bg-white/5 p-2.5 rounded-lg mt-2">
+                                <span class="text-slate-400">Weight:</span>
+                                <span id="weight-add" class="text-emerald font-bold">+100 Pts</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Subtraction Card -->
+                    <div class="glass-panel p-5 sm:p-6 flex flex-col justify-between space-y-5 border-cyan/20 hover:border-cyan/40 transition-all" id="card-sub">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-lg bg-cyan/20 text-cyan flex items-center justify-center font-mono font-bold text-xl">
+                                    −
+                                </div>
+                                <span class="font-display font-bold text-white">SUBTRACTION</span>
+                            </div>
+                            <div class="relative inline-block w-11 h-6 align-middle select-none">
+                                <input type="checkbox" id="toggle-sub" class="toggle-checkbox absolute opacity-0 w-0 h-0" checked onchange="window.app && window.app.updateConfig('sub')">
+                                <label for="toggle-sub" class="toggle-label block overflow-hidden h-6 rounded-full bg-slate-700 cursor-pointer transition-colors duration-200">
+                                    <span class="toggle-ball block w-4 h-4 m-1 rounded-full bg-white transition-transform duration-200"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                    <span>1st Num Digits:</span>
+                                    <span id="label-sub-range1" class="text-cyan font-bold">2 Digits</span>
+                                </div>
+                                <input type="range" id="range-sub-1" min="1" max="3" value="2" step="1" oninput="window.app && window.app.updateConfig('sub')" class="w-full accent-cyan bg-slate-800 rounded-lg cursor-pointer h-2">
+                            </div>
+
+                            <div>
+                                <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                    <span>2nd Num Digits:</span>
+                                    <span id="label-sub-range2" class="text-cyan font-bold">2 Digits</span>
+                                </div>
+                                <input type="range" id="range-sub-2" min="1" max="3" value="2" step="1" oninput="window.app && window.app.updateConfig('sub')" class="w-full accent-cyan bg-slate-800 rounded-lg cursor-pointer h-2">
+                            </div>
+
+                            <div class="flex items-center justify-between text-xs font-mono bg-white/5 p-2.5 rounded-lg mt-2">
+                                <span class="text-slate-400">Weight:</span>
+                                <span id="weight-sub" class="text-cyan font-bold">+120 Pts</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Multiplication Card -->
+                    <div class="glass-panel p-5 sm:p-6 flex flex-col justify-between space-y-5 border-violet/20 hover:border-violet/40 transition-all" id="card-mul">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-lg bg-violet/20 text-violet flex items-center justify-center font-mono font-bold text-xl">
+                                    ×
+                                </div>
+                                <span class="font-display font-bold text-white">MULTIPLICATION</span>
+                            </div>
+                            <div class="relative inline-block w-11 h-6 align-middle select-none">
+                                <input type="checkbox" id="toggle-mul" class="toggle-checkbox absolute opacity-0 w-0 h-0" checked onchange="window.app && window.app.updateConfig('mul')">
+                                <label for="toggle-mul" class="toggle-label block overflow-hidden h-6 rounded-full bg-slate-700 cursor-pointer transition-colors duration-200">
+                                    <span class="toggle-ball block w-4 h-4 m-1 rounded-full bg-white transition-transform duration-200"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                        <span>1st Factor Max:</span>
+                                        <span id="label-mul-range1" class="text-violet font-bold">1-12</span>
+                                    </div>
+                                    <input type="range" id="range-mul-1" min="1" max="3" value="1" step="1" oninput="window.app && window.app.updateConfig('mul')" class="w-full accent-violet bg-slate-800 rounded-lg cursor-pointer h-2">
+                                </div>
+
+                                <div>
+                                    <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                        <span>1st Factor Min:</span>
+                                        <span id="label-mul-min1" class="text-violet font-bold">≥ 2</span>
+                                    </div>
+                                    <input type="range" id="range-mul-min1" min="2" max="50" value="2" step="1" oninput="window.app && window.app.updateConfig('mul')" class="w-full accent-violet bg-slate-800 rounded-lg cursor-pointer h-2">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                        <span>2nd Factor Max:</span>
+                                        <span id="label-mul-range2" class="text-violet font-bold">1-12</span>
+                                    </div>
+                                    <input type="range" id="range-mul-2" min="1" max="3" value="1" step="1" oninput="window.app && window.app.updateConfig('mul')" class="w-full accent-violet bg-slate-800 rounded-lg cursor-pointer h-2">
+                                </div>
+
+                                <div>
+                                    <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                        <span>2nd Factor Min:</span>
+                                        <span id="label-mul-min2" class="text-violet font-bold">≥ 2</span>
+                                    </div>
+                                    <input type="range" id="range-mul-min2" min="2" max="30" value="2" step="1" oninput="window.app && window.app.updateConfig('mul')" class="w-full accent-violet bg-slate-800 rounded-lg cursor-pointer h-2">
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between text-xs font-mono bg-white/5 p-2.5 rounded-lg mt-2">
+                                <span class="text-slate-400">Weight:</span>
+                                <span id="weight-mul" class="text-violet font-bold">+180 Pts</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Division Card -->
+                    <div class="glass-panel p-5 sm:p-6 flex flex-col justify-between space-y-5 border-coral/20 hover:border-coral/40 transition-all" id="card-div">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-lg bg-coral/20 text-coral flex items-center justify-center font-mono font-bold text-xl">
+                                    ÷
+                                </div>
+                                <span class="font-display font-bold text-white">DIVISION</span>
+                            </div>
+                            <div class="relative inline-block w-11 h-6 align-middle select-none">
+                                <input type="checkbox" id="toggle-div" class="toggle-checkbox absolute opacity-0 w-0 h-0" checked onchange="window.app && window.app.updateConfig('div')">
+                                <label for="toggle-div" class="toggle-label block overflow-hidden h-6 rounded-full bg-slate-700 cursor-pointer transition-colors duration-200">
+                                    <span class="toggle-ball block w-4 h-4 m-1 rounded-full bg-white transition-transform duration-200"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                        <span>Divisor Max:</span>
+                                        <span id="label-div-range1" class="text-coral font-bold">1-10</span>
+                                    </div>
+                                    <input type="range" id="range-div-1" min="1" max="3" value="1" step="1" oninput="window.app && window.app.updateConfig('div')" class="w-full accent-coral bg-slate-800 rounded-lg cursor-pointer h-2">
+                                </div>
+
+                                <div>
+                                    <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                        <span>Divisor Min:</span>
+                                        <span id="label-div-min1" class="text-coral font-bold">≥ 2</span>
+                                    </div>
+                                    <input type="range" id="range-div-min1" min="2" max="25" value="2" step="1" oninput="window.app && window.app.updateConfig('div')" class="w-full accent-coral bg-slate-800 rounded-lg cursor-pointer h-2">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                        <span>Quotient Max:</span>
+                                        <span id="label-div-range2" class="text-coral font-bold">1-12</span>
+                                    </div>
+                                    <input type="range" id="range-div-2" min="1" max="3" value="1" step="1" oninput="window.app && window.app.updateConfig('div')" class="w-full accent-coral bg-slate-800 rounded-lg cursor-pointer h-2">
+                                </div>
+
+                                <div>
+                                    <div class="flex justify-between text-xs font-mono text-slate-400 mb-1">
+                                        <span>Quotient Min:</span>
+                                        <span id="label-div-min2" class="text-coral font-bold">≥ 2</span>
+                                    </div>
+                                    <input type="range" id="range-div-min2" min="2" max="25" value="2" step="1" oninput="window.app && window.app.updateConfig('div')" class="w-full accent-coral bg-slate-800 rounded-lg cursor-pointer h-2">
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between text-xs font-mono bg-white/5 p-2.5 rounded-lg mt-2">
+                                <span class="text-slate-400">Weight:</span>
+                                <span id="weight-div" class="text-coral font-bold">+200 Pts</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Start Game CTA Button -->
+            <div class="pt-2 text-center">
+                <button onclick="window.app && window.app.startGame()" id="startBtn" class="w-full sm:w-auto px-10 py-4 rounded-2xl bg-gradient-to-r from-cyan via-emerald to-violet font-display font-black text-obsidian text-lg tracking-wider hover:opacity-95 transform hover:-translate-y-1 active:translate-y-0 transition-all shadow-neon-cyan flex items-center justify-center gap-3 mx-auto">
+                    <span>LAUNCH PRACTICE SESSION</span>
+                    <i class="fa-solid fa-play"></i>
+                </button>
+                <p id="operatorError" class="text-xs text-coral font-mono mt-2 hidden">⚠️ Please enable at least one operator to start.</p>
+            </div>
+        </section>
+
+        <!-- Game Screen -->
+        <section id="gameScreen" class="w-full space-y-6 hidden">
+            <!-- Top HUD & Pressure Gauge Bar -->
+            <div class="glass-panel p-4 space-y-3">
+                <div class="flex items-center justify-between gap-4">
+                    <!-- Timer Numeric -->
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-stopwatch text-cyan"></i>
+                        <span id="hudTimer" class="font-mono font-black text-xl text-white">01:00</span>
+                    </div>
+
+                    <!-- Streak & Multiplier Status -->
+                    <div class="flex items-center gap-2">
+                        <span id="hudStreakBadge" class="font-display font-extrabold text-xs px-2.5 py-1 rounded-full bg-violet/20 border border-violet/40 text-violet">
+                            COMBO x1
+                        </span>
+                        <span id="hudStreakTier" class="hidden sm:inline-block font-mono text-xs text-slate-400">
+                            BASE
+                        </span>
+                    </div>
+
+                    <!-- Current Score -->
+                    <div class="text-right">
+                        <span class="block text-[10px] font-mono text-slate-400 uppercase">SCORE</span>
+                        <span id="hudScore" class="font-display font-black text-2xl text-emerald tracking-wider">0</span>
+                    </div>
+                </div>
+
+                <!-- Real-Time Fluid Pressure Gauge Bar -->
+                <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-white/10">
+                    <div id="pressureGauge" class="h-full bg-gradient-to-r from-cyan via-emerald to-coral rounded-full transition-all duration-300 w-full shadow-neon-cyan"></div>
+                </div>
+
+                <!-- Dynamic Streak Liquid Bar -->
+                <div class="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
+                    <div id="streakBar" class="h-full bg-violet transition-all duration-300 w-0"></div>
+                </div>
+            </div>
+
+            <div id="equationCard" class="glass-panel p-8 sm:p-12 text-center space-y-4 relative overflow-hidden border-2 border-cyan/30 shadow-neon-cyan transition-all">
+                <!-- Background Accent Glow -->
+                <div class="absolute -right-10 -top-10 w-40 h-40 bg-cyan/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="absolute -left-10 -bottom-10 w-40 h-40 bg-violet/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div class="inline-block px-3 py-1 rounded-full bg-white/5 border border-white/10 text-slate-400 font-mono text-xs mb-2" id="questionOperatorLabel">
+                    THINK FAST EQUATION
+                </div>
+
+                <!-- Highly Readable Monospaced Equation Text -->
+                <div id="equationText" class="font-mono font-bold text-5xl sm:text-7xl tracking-normal text-white drop-shadow-md py-2">
+                    24 × 8 = ?
+                </div>
+            </div>
+
+            <!-- 5 Tactile Option Tiles (3D Arcade Buttons) -->
+            <div class="grid grid-cols-1 sm:grid-cols-5 gap-3" id="optionsContainer">
+                <!-- 5 Buttons injected dynamically -->
+            </div>
+
+            <!-- Key Shortcuts Hint -->
+            <div class="text-center font-mono text-xs text-slate-500 hidden sm:block">
+                💡 Tip: Use keyboard keys <span class="text-cyan font-bold">[1]</span> <span class="text-cyan font-bold">[2]</span> <span class="text-cyan font-bold">[3]</span> <span class="text-cyan font-bold">[4]</span> <span class="text-cyan font-bold">[5]</span> for lightning response speed.
+            </div>
+        </section>
+
+        <!-- Analysis Screen -->
+        <section id="analysisScreen" class="w-full space-y-6 hidden">
+            <!-- Header Summary -->
+            <div class="text-center space-y-2">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald/10 border border-emerald/30 text-emerald font-mono text-xs">
+                    <i class="fa-solid fa-circle-check"></i> SESSION COMPLETE
+                </div>
+                <h2 class="text-3xl sm:text-4xl font-display font-black text-white">PERFORMANCE ANALYSIS</h2>
+                <p class="text-sm text-slate-400">Detailed breakdown of operational speed, precision, and accuracy bottlenecks.</p>
+            </div>
+
+            <!-- Core Stats Banner -->
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div class="glass-panel p-4 text-center space-y-1 border-cyan/20">
+                    <span class="block text-xs font-mono text-slate-400">SESSION SCORE</span>
+                    <span id="finalScore" class="font-display font-black text-xl sm:text-2xl text-cyan">0</span>
+                </div>
+                <div class="glass-panel p-4 text-center space-y-1 border-gold/20">
+                    <span class="block text-xs font-mono text-slate-400">MATH SOLVED</span>
+                    <span id="finalTotalSolved" class="font-display font-black text-xl sm:text-2xl text-gold">0</span>
+                </div>
+                <div class="glass-panel p-4 text-center space-y-1 border-emerald/20">
+                    <span class="block text-xs font-mono text-slate-400">ACCURACY RATE</span>
+                    <span id="finalAccuracy" class="font-display font-black text-xl sm:text-2xl text-emerald">0%</span>
+                </div>
+                <div class="glass-panel p-4 text-center space-y-1 border-violet/20">
+                    <span class="block text-xs font-mono text-slate-400">MAX STREAK</span>
+                    <span id="finalMaxStreak" class="font-display font-black text-xl sm:text-2xl text-violet">0</span>
+                </div>
+                <div class="glass-panel p-4 text-center space-y-1 border-coral/20">
+                    <span class="block text-xs font-mono text-slate-400">AVG SPEED</span>
+                    <span id="finalAvgSpeed" class="font-display font-black text-xl sm:text-2xl text-coral">0.0s</span>
+                </div>
+            </div>
+
+            <!-- Diagnosis Panel -->
+            <div class="glass-panel p-6 space-y-4 border-white/10">
+                <h3 class="font-display font-bold text-lg text-white flex items-center gap-2">
+                    <i class="fa-solid fa-brain text-violet"></i> DIAGNOSTIC DIAGRAM
+                </h3>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Strengths -->
+                    <div class="bg-emerald/5 border border-emerald/20 p-4 rounded-xl space-y-2">
+                        <div class="flex items-center gap-2 text-emerald font-display font-bold text-sm">
+                            <i class="fa-solid fa-bolt"></i> PRIMARY STRENGTHS
+                        </div>
+                        <ul id="strengthList" class="text-xs text-slate-300 space-y-1.5 font-mono list-disc list-inside">
+                            <li>Analyzing data...</li>
+                        </ul>
+                    </div>
+
+                    <!-- Weaknesses -->
+                    <div class="bg-coral/5 border border-coral/20 p-4 rounded-xl space-y-2">
+                        <div class="flex items-center gap-2 text-coral font-display font-bold text-sm">
+                            <i class="fa-solid fa-triangle-exclamation"></i> RECOMMENDED FOCUS AREAS
+                        </div>
+                        <ul id="weaknessList" class="text-xs text-slate-300 space-y-1.5 font-mono list-disc list-inside">
+                            <li>Analyzing data...</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Operator Metrics Breakdown -->
+            <div class="glass-panel p-6 space-y-4">
+                <h3 class="font-display font-bold text-base text-slate-300 uppercase tracking-wider">
+                    OPERATOR METRICS BREAKDOWN
+                </h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="operatorBreakdownGrid">
+                    <!-- Cards populated via JS -->
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+                <button onclick="window.app && window.app.startGame()" class="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-emerald to-cyan font-display font-bold text-obsidian text-sm tracking-wider hover:opacity-90 shadow-neon-emerald transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-rotate-right"></i> REPLAY SESSION
+                </button>
+                <button onclick="window.app && window.app.showSetup()" class="w-full sm:w-auto px-8 py-3.5 rounded-xl glass-tile text-white font-display font-bold text-sm tracking-wider hover:border-cyan transition-all flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-sliders"></i> MODIFY CONFIGURATION
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="w-full border-t border-white/5 py-4 text-center font-mono text-xs text-slate-500 mt-auto">
+        THINK FAST ENGINE v2.5 // INTEGRATED ARCADE PRACTICE & ANALYTICS
+    </footer>
+
+    <script>
+        /* =========================================================
+           THINK FAST — FRONTEND ONLY
+           No backend, no network calls. Player stats are stored
+           in localStorage on this device.
+           ========================================================= */
+
+        class ArcadeAudio {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+            }
+
+            playCorrect() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, this.ctx.currentTime); // C5
+                    osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.15); // A5
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.15);
+                } catch(e){}
+            }
+
+            playError() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(90, this.ctx.currentTime + 0.25);
+                    gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.25);
+                } catch(e){}
+            }
+
+            playCombo() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const notes = [440, 554.37, 659.25, 880];
+                    notes.forEach((freq, idx) => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.04);
+                        gain.gain.setValueAtTime(0.15, this.ctx.currentTime + idx * 0.04);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + idx * 0.04 + 0.2);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start(this.ctx.currentTime + idx * 0.04);
+                        osc.stop(this.ctx.currentTime + idx * 0.04 + 0.2);
+                    });
+                } catch(e){}
+            }
+        }
+
+        class ParticleEngine {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                if (!this.canvas) return;
+                this.ctx = this.canvas.getContext('2d');
+                this.particles = [];
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                this.loop();
+            }
+
+            resize() {
+                if (!this.canvas) return;
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+
+            spawn(x, y, color, count = 25) {
+                for (let i = 0; i < count; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 8 + 2;
+                    this.particles.push({
+                        x, y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        radius: Math.random() * 4 + 2,
+                        color,
+                        alpha: 1,
+                        decay: Math.random() * 0.03 + 0.015
+                    });
+                }
+            }
+
+            loop() {
+                if (!this.ctx) return;
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.15;
+                    p.alpha -= p.decay;
+
+                    if (p.alpha <= 0) {
+                        this.particles.splice(i, 1);
+                        continue;
+                    }
+
+                    this.ctx.save();
+                    this.ctx.globalAlpha = p.alpha;
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.restore();
+                }
+                requestAnimationFrame(() => this.loop());
+            }
+        }
+
+        class ThinkFastApp {
+            constructor() {
+                this.audio = new ArcadeAudio();
+                this.particles = null;
+
+                // Local Stats Persistence Key
+                this.STORAGE_KEY = 'think_fast_player_stats';
+
+                // Configuration State
+                this.config = {
+                    timeLimitMinutes: 5,
+                    operators: {
+                        add: { enabled: true, range1: 2, range2: 2, weight: 100 },
+                        sub: { enabled: true, range1: 2, range2: 2, weight: 120 },
+                        mul: { enabled: true, range1: 1, range2: 1, min1: 2, min2: 2, weight: 180 },
+                        div: { enabled: true, range1: 1, range2: 1, min1: 2, min2: 2, weight: 200 }
+                    }
+                };
+
+                this.state = this.freshState(300);
+                this.initKeyboard();
+            }
+
+            freshState(totalSeconds) {
+                return {
+                    active: false,
+                    score: 0,
+                    streak: 0,
+                    maxStreak: 0,
+                    timeRemaining: totalSeconds,
+                    timerInterval: null,
+                    currentQuestion: null,
+                    questionStartTime: 0,
+                    stats: {
+                        totalAsked: 0,
+                        totalCorrect: 0,
+                        totalMistakes: 0,
+                        byOperator: {
+                            add: { asked: 0, correct: 0, totalTime: 0 },
+                            sub: { asked: 0, correct: 0, totalTime: 0 },
+                            mul: { asked: 0, correct: 0, totalTime: 0 },
+                            div: { asked: 0, correct: 0, totalTime: 0 }
+                        }
+                    }
+                };
+            }
+
+            /* ---------- Level / XP math ---------- */
+            // Level 1 below 100,000 XP. Level 2 at 100,000. Level n (n>=2) starts at 100000 * 5^(n-2).
+            getLevelFromXp(xp) {
+                if (!xp || xp < 100000) return 1;
+                let lvl = 2;
+                let req = 500000;
+                while (xp >= req) {
+                    lvl++;
+                    req *= 5;
+                }
+                return lvl;
+            }
+
+            getXpForLevel(lvl) {
+                if (lvl <= 1) return 0;
+                if (lvl === 2) return 100000;
+                return 100000 * Math.pow(5, lvl - 2);
+            }
+
+            /* ---------- Local storage ---------- */
+            getLocalStats() {
+                try {
+                    const saved = localStorage.getItem(this.STORAGE_KEY);
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        return {
+                            highScore: parsed.highScore || 0,
+                            totalMathSolved: parsed.totalMathSolved || parsed.totalMathsSolved || 0,
+                            totalXp: parsed.totalXp || 0,
+                            userLevel: parsed.userLevel || this.getLevelFromXp(parsed.totalXp || 0),
+                            sessionsPlayed: parsed.sessionsPlayed || 0
+                        };
+                    }
+                } catch (e) {
+                    console.warn('LocalStorage read error:', e);
+                }
+                return {
+                    highScore: 0,
+                    totalMathSolved: 0,
+                    totalXp: 0,
+                    userLevel: 1,
+                    sessionsPlayed: 0
+                };
+            }
+
+            saveLocalStats(stats) {
+                try {
+                    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(stats));
+                } catch (e) {
+                    console.warn('LocalStorage write error:', e);
+                }
+            }
+
+            init() {
+                this.particles = new ParticleEngine('particleCanvas');
+                this.updateConfig();
+            }
+
+            /* ---------- Stats modal ---------- */
+            openDashboardModal() {
+                const modal = document.getElementById('dashboardModal');
+                if (!modal) return;
+
+                const s = this.getLocalStats();
+                const totalXp = s.totalXp;
+                const userLevel = this.getLevelFromXp(totalXp);
+
+                const startXp = this.getXpForLevel(userLevel);
+                const nextXp = this.getXpForLevel(userLevel + 1);
+                const range = Math.max(1, nextXp - startXp);
+                const currentProgress = Math.max(0, totalXp - startXp);
+                const progressPct = Math.min(100, Math.floor((currentProgress / range) * 100));
+
+                document.getElementById('dashLevel').innerText = `LEVEL ${userLevel}`;
+                document.getElementById('dashHighScore').innerText = s.highScore.toLocaleString();
+                document.getElementById('dashTotalSolved').innerText = s.totalMathSolved.toLocaleString();
+                document.getElementById('dashXp').innerText = `${totalXp.toLocaleString()} XP`;
+                document.getElementById('dashSessions').innerText = s.sessionsPlayed.toLocaleString();
+                document.getElementById('dashProgressText').innerText = `${totalXp.toLocaleString()} / ${nextXp.toLocaleString()} XP to Level ${userLevel + 1}`;
+                document.getElementById('dashProgressBar').style.width = `${progressPct}%`;
+
+                modal.classList.remove('hidden');
+            }
+
+            closeDashboardModal() {
+                const modal = document.getElementById('dashboardModal');
+                if (modal) modal.classList.add('hidden');
+            }
+
+            /* ---------- Audio ---------- */
+            toggleSound() {
+                this.audio.init();
+                this.audio.muted = !this.audio.muted;
+                const icon = document.getElementById('soundIcon');
+                if (icon) {
+                    icon.className = this.audio.muted ? 'fa-solid fa-volume-xmark text-slate-500' : 'fa-solid fa-volume-high text-cyan';
+                }
+            }
+
+            /* ---------- Session time limit ---------- */
+            setLimit(minutes) {
+                const mins = parseFloat(minutes);
+                if (isNaN(mins) || mins <= 0) return;
+                this.config.timeLimitMinutes = mins;
+
+                const customInput = document.getElementById('customMinutesInput');
+                if (customInput) customInput.value = '';
+
+                document.querySelectorAll('#timePresets button').forEach(btn => {
+                    const matches = parseFloat(btn.getAttribute('data-time')) === mins;
+                    btn.className = matches
+                        ? 'time-btn px-3 py-2.5 rounded-xl border border-cyan bg-cyan/10 font-mono text-sm font-bold text-cyan shadow-neon-cyan transition-all'
+                        : 'time-btn px-3 py-2.5 rounded-xl border border-white/10 bg-white/5 font-mono text-sm font-bold hover:border-cyan transition-all';
+                });
+            }
+
+            setCustomLimit(val) {
+                const mins = parseFloat(val);
+                if (isNaN(mins) || mins <= 0) return;
+                this.config.timeLimitMinutes = mins;
+
+                document.querySelectorAll('#timePresets button').forEach(btn => {
+                    btn.className = 'time-btn px-3 py-2.5 rounded-xl border border-white/10 bg-white/5 font-mono text-sm font-bold hover:border-cyan transition-all';
+                });
+            }
+
+            /* ---------- Setup screen config ---------- */
+            updateConfig(opKey) {
+                const ops = ['add', 'sub', 'mul', 'div'];
+                let activeCount = 0;
+                let totalDifficultyWeight = 0;
+
+                ops.forEach(op => {
+                    const toggle = document.getElementById(`toggle-${op}`);
+                    const range1El = document.getElementById(`range-${op}-1`);
+                    const range2El = document.getElementById(`range-${op}-2`);
+                    if (!toggle || !range1El || !range2El) return;
+
+                    const enabled = toggle.checked;
+                    const val1 = parseInt(range1El.value);
+                    const val2 = parseInt(range2El.value);
+
+                    this.config.operators[op].enabled = enabled;
+                    this.config.operators[op].range1 = val1;
+                    this.config.operators[op].range2 = val2;
+
+                    const range1Label = document.getElementById(`label-${op}-range1`);
+                    const range2Label = document.getElementById(`label-${op}-range2`);
+                    const weightLabel = document.getElementById(`weight-${op}`);
+
+                    let r1Text = '', r2Text = '';
+                    let wBase = 100;
+
+                    if (op === 'add') {
+                        r1Text = val1 === 1 ? '1 Digit' : val1 === 2 ? '2 Digits' : '3 Digits';
+                        r2Text = val2 === 1 ? '1 Digit' : val2 === 2 ? '2 Digits' : '3 Digits';
+                        wBase = (val1 + val2) * 30 + 40;
+                    } else if (op === 'sub') {
+                        r1Text = val1 === 1 ? '1 Digit' : val1 === 2 ? '2 Digits' : '3 Digits';
+                        r2Text = val2 === 1 ? '1 Digit' : val2 === 2 ? '2 Digits' : '3 Digits';
+                        wBase = (val1 + val2) * 35 + 50;
+                    } else if (op === 'mul') {
+                        const min1El = document.getElementById('range-mul-min1');
+                        const min2El = document.getElementById('range-mul-min2');
+                        const min1Val = min1El ? parseInt(min1El.value) || 2 : 2;
+                        const min2Val = min2El ? parseInt(min2El.value) || 2 : 2;
+                        this.config.operators.mul.min1 = min1Val;
+                        this.config.operators.mul.min2 = min2Val;
+
+                        const lblMin1 = document.getElementById('label-mul-min1');
+                        const lblMin2 = document.getElementById('label-mul-min2');
+                        if (lblMin1) lblMin1.innerText = `≥ ${min1Val}`;
+                        if (lblMin2) lblMin2.innerText = `≥ ${min2Val}`;
+
+                        r1Text = val1 === 1 ? '1-12' : val1 === 2 ? '1-99' : '1-999';
+                        r2Text = val2 === 1 ? '1-12' : val2 === 2 ? '1-50' : '1-99';
+                        wBase = (val1 + val2) * 70 + 40 + (min1Val + min2Val) * 4;
+                    } else if (op === 'div') {
+                        const min1El = document.getElementById('range-div-min1');
+                        const min2El = document.getElementById('range-div-min2');
+                        const min1Val = min1El ? parseInt(min1El.value) || 2 : 2;
+                        const min2Val = min2El ? parseInt(min2El.value) || 2 : 2;
+                        this.config.operators.div.min1 = min1Val;
+                        this.config.operators.div.min2 = min2Val;
+
+                        const lblMin1 = document.getElementById('label-div-min1');
+                        const lblMin2 = document.getElementById('label-div-min2');
+                        if (lblMin1) lblMin1.innerText = `≥ ${min1Val}`;
+                        if (lblMin2) lblMin2.innerText = `≥ ${min2Val}`;
+
+                        r1Text = val1 === 1 ? '1-10' : val1 === 2 ? '1-20' : '1-35';
+                        r2Text = val2 === 1 ? '1-12' : val2 === 2 ? '1-25' : '1-50';
+                        wBase = (val1 + val2) * 80 + 40 + (min1Val + min2Val) * 4;
+                    }
+
+                    this.config.operators[op].weight = wBase;
+                    if (range1Label) range1Label.innerText = r1Text;
+                    if (range2Label) range2Label.innerText = r2Text;
+                    if (weightLabel) weightLabel.innerText = `+${wBase} Pts`;
+
+                    if (enabled) {
+                        activeCount++;
+                        totalDifficultyWeight += wBase;
+                    }
+                });
+
+                const globalBadge = document.getElementById('globalDifficultyBadge');
+                const err = document.getElementById('operatorError');
+                if (activeCount === 0) {
+                    if (err) err.classList.remove('hidden');
+                    if (globalBadge) globalBadge.innerText = '0x NO OPERATORS';
+                } else {
+                    if (err) err.classList.add('hidden');
+                    const mult = (totalDifficultyWeight / (activeCount * 100)).toFixed(1);
+                    if (globalBadge) globalBadge.innerText = `${mult}x SCORE MULTIPLIER`;
+                }
+            }
+
+            showSetup() {
+                clearInterval(this.state.timerInterval);
+                this.state.active = false;
+                document.getElementById('setupScreen').classList.remove('hidden');
+                document.getElementById('gameScreen').classList.add('hidden');
+                document.getElementById('analysisScreen').classList.add('hidden');
+            }
+
+            /* ---------- Game flow ---------- */
+            startGame() {
+                this.audio.init();
+                clearInterval(this.state.timerInterval);
+
+                const enabledOps = Object.keys(this.config.operators).filter(k => this.config.operators[k].enabled);
+                if (enabledOps.length === 0) {
+                    document.getElementById('operatorError').classList.remove('hidden');
+                    return;
+                }
+
+                const totalSeconds = Math.round(this.config.timeLimitMinutes * 60);
+
+                this.state = this.freshState(totalSeconds);
+                this.state.active = true;
+
+                document.getElementById('setupScreen').classList.add('hidden');
+                document.getElementById('analysisScreen').classList.add('hidden');
+                document.getElementById('gameScreen').classList.remove('hidden');
+
+                this.updateHUD();
+                this.nextQuestion();
+                this.startTimer();
+            }
+
+            startTimer() {
+                clearInterval(this.state.timerInterval);
+                this.state.timerInterval = setInterval(() => {
+                    this.state.timeRemaining--;
+                    this.updateHUD();
+
+                    if (this.state.timeRemaining <= 0) {
+                        this.endGame();
+                    }
+                }, 1000);
+            }
+
+            updateHUD() {
+                const remaining = Math.max(0, this.state.timeRemaining);
+                const mins = Math.floor(remaining / 60);
+                const secs = remaining % 60;
+                document.getElementById('hudTimer').innerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+                const totalSeconds = Math.max(1, this.config.timeLimitMinutes * 60);
+                const pct = Math.max(0, (remaining / totalSeconds) * 100);
+                const gauge = document.getElementById('pressureGauge');
+                if (gauge) {
+                    gauge.style.width = `${pct}%`;
+                    if (pct < 25) {
+                        gauge.className = 'h-full bg-coral rounded-full transition-all duration-300 shadow-neon-coral animate-pulse';
+                    } else if (pct < 50) {
+                        gauge.className = 'h-full bg-violet rounded-full transition-all duration-300 shadow-neon-violet';
+                    } else {
+                        gauge.className = 'h-full bg-gradient-to-r from-cyan to-emerald rounded-full transition-all duration-300 shadow-neon-cyan';
+                    }
+                }
+
+                document.getElementById('hudScore').innerText = this.state.score.toLocaleString();
+
+                const badge = document.getElementById('hudStreakBadge');
+                const tier = document.getElementById('hudStreakTier');
+                const streakBar = document.getElementById('streakBar');
+
+                let multiplier = 1;
+                let label = 'BASE';
+                let colorClass = 'bg-violet/20 border-violet/40 text-violet';
+
+                if (this.state.streak >= 15) {
+                    multiplier = 5;
+                    label = '🔥 HYPER-DRIVE (x5)';
+                    colorClass = 'bg-coral/30 border-coral text-coral shadow-neon-coral';
+                } else if (this.state.streak >= 10) {
+                    multiplier = 3;
+                    label = '⚡ PLASMA (x3)';
+                    colorClass = 'bg-violet/30 border-violet text-violet shadow-neon-violet';
+                } else if (this.state.streak >= 5) {
+                    multiplier = 2;
+                    label = '✨ FLAME (x2)';
+                    colorClass = 'bg-emerald/30 border-emerald text-emerald shadow-neon-emerald';
+                }
+
+                if (badge) {
+                    badge.className = `font-display font-extrabold text-xs px-2.5 py-1 rounded-full border ${colorClass} transition-all`;
+                    badge.innerText = `COMBO x${multiplier}`;
+                }
+                if (tier) tier.innerText = label;
+
+                if (streakBar) {
+                    const streakPct = Math.min(100, (this.state.streak / 15) * 100);
+                    streakBar.style.width = `${streakPct}%`;
+                }
+            }
+
+            nextQuestion() {
+                const activeOps = Object.keys(this.config.operators).filter(k => this.config.operators[k].enabled);
+                const opKey = activeOps[Math.floor(Math.random() * activeOps.length)];
+
+                const r1 = this.config.operators[opKey].range1;
+                const r2 = this.config.operators[opKey].range2;
+
+                let num1, num2, answer, symbol, label;
+
+                const getDigitRange = (r) => {
+                    const max = r === 1 ? 9 : r === 2 ? 99 : 999;
+                    const min = r === 1 ? 1 : r === 2 ? 10 : 100;
+                    return Math.floor(Math.random() * (max - min + 1)) + min;
+                };
+
+                const getMulFactor1Range = (r, minLimit = 2) => {
+                    const max = r === 1 ? 12 : r === 2 ? 99 : 999;
+                    const min = Math.min(minLimit, max - 1);
+                    return Math.floor(Math.random() * (max - min + 1)) + min;
+                };
+
+                const getMulFactor2Range = (r, minLimit = 2) => {
+                    const max = r === 1 ? 12 : r === 2 ? 50 : 99;
+                    const min = Math.min(minLimit, max - 1);
+                    return Math.floor(Math.random() * (max - min + 1)) + min;
+                };
+
+                const getDivisorRange = (r, minLimit = 2) => {
+                    const max = r === 1 ? 10 : r === 2 ? 20 : 35;
+                    const min = Math.min(minLimit, max - 1);
+                    return Math.floor(Math.random() * (max - min + 1)) + min;
+                };
+
+                const getQuotientRange = (r, minLimit = 2) => {
+                    const max = r === 1 ? 12 : r === 2 ? 25 : 50;
+                    const min = Math.min(minLimit, max - 1);
+                    return Math.floor(Math.random() * (max - min + 1)) + min;
+                };
+
+                if (opKey === 'add') {
+                    symbol = '+';
+                    label = 'ADDITION';
+                    num1 = getDigitRange(r1);
+                    num2 = getDigitRange(r2);
+                    answer = num1 + num2;
+                } else if (opKey === 'sub') {
+                    symbol = '−';
+                    label = 'SUBTRACTION';
+                    num1 = getDigitRange(r1);
+                    num2 = getDigitRange(r2);
+                    if (num2 > num1) {
+                        const temp = num1;
+                        num1 = num2;
+                        num2 = temp;
+                    }
+                    answer = num1 - num2;
+                } else if (opKey === 'mul') {
+                    symbol = '×';
+                    label = 'MULTIPLICATION';
+                    const min1 = this.config.operators.mul.min1 || 2;
+                    const min2 = this.config.operators.mul.min2 || 2;
+                    num1 = getMulFactor1Range(r1, min1);
+                    num2 = getMulFactor2Range(r2, min2);
+                    answer = num1 * num2;
+                } else if (opKey === 'div') {
+                    symbol = '÷';
+                    label = 'DIVISION';
+                    const minDiv = this.config.operators.div.min1 || 2;
+                    const minQuot = this.config.operators.div.min2 || 2;
+                    num2 = getDivisorRange(r1, minDiv);
+                    const quotient = getQuotientRange(r2, minQuot);
+                    answer = quotient;
+                    num1 = num2 * quotient;
+                }
+
+                const optionsSet = new Set();
+                optionsSet.add(answer);
+
+                while (optionsSet.size < 5) {
+                    let offset = (Math.floor(Math.random() * 5) + 1) * (Math.random() < 0.5 ? 1 : -1);
+                    if (Math.random() < 0.3) offset *= 10;
+                    let fake = answer + offset;
+                    if (fake >= 0 && fake !== answer) {
+                        optionsSet.add(fake);
+                    }
+                }
+
+                const optionsArray = Array.from(optionsSet).sort(() => Math.random() - 0.5);
+
+                this.state.currentQuestion = {
+                    opKey,
+                    num1,
+                    num2,
+                    symbol,
+                    answer,
+                    options: optionsArray,
+                    weight: this.config.operators[opKey].weight
+                };
+
+                this.state.questionStartTime = Date.now();
+
+                document.getElementById('questionOperatorLabel').innerText = `OPERATOR: ${label}`;
+                document.getElementById('equationText').innerText = `${num1} ${symbol} ${num2} = ?`;
+
+                const container = document.getElementById('optionsContainer');
+                container.innerHTML = '';
+
+                optionsArray.forEach((opt, idx) => {
+                    const btn = document.createElement('button');
+                    btn.className = `glass-tile p-4 sm:p-5 rounded-2xl flex flex-col items-center justify-center border-white/10 hover:border-cyan hover:bg-cyan/10 transition-all font-mono font-bold text-2xl sm:text-3xl text-white shadow-lg active:scale-95 group relative`;
+                    btn.onclick = (e) => this.submitAnswer(opt, e);
+                    btn.innerHTML = `
+                        <span class="absolute top-2 left-2 text-[10px] font-mono text-slate-500 group-hover:text-cyan font-bold">[${idx + 1}]</span>
+                        <span class="group-hover:text-cyan group-hover:scale-110 transition-transform">${opt}</span>
+                    `;
+                    container.appendChild(btn);
+                });
+            }
+
+            initKeyboard() {
+                window.addEventListener('keydown', (e) => {
+                    if (!this.state.active || !this.state.currentQuestion) return;
+                    const keyNum = parseInt(e.key);
+                    if (keyNum >= 1 && keyNum <= 5) {
+                        const idx = keyNum - 1;
+                        if (this.state.currentQuestion.options[idx] !== undefined) {
+                            this.submitAnswer(this.state.currentQuestion.options[idx]);
+                        }
+                    }
+                });
+            }
+
+            submitAnswer(chosenValue, event = null) {
+                if (!this.state.active) return;
+
+                const q = this.state.currentQuestion;
+                const timeTaken = (Date.now() - this.state.questionStartTime) / 1000;
+                const isCorrect = chosenValue === q.answer;
+
+                this.state.stats.totalAsked++;
+                this.state.stats.byOperator[q.opKey].asked++;
+                this.state.stats.byOperator[q.opKey].totalTime += timeTaken;
+
+                if (isCorrect) {
+                    this.state.stats.totalCorrect++;
+                    this.state.stats.byOperator[q.opKey].correct++;
+                    this.state.streak++;
+                    if (this.state.streak > this.state.maxStreak) {
+                        this.state.maxStreak = this.state.streak;
+                    }
+
+                    let mult = 1;
+                    if (this.state.streak >= 15) mult = 5;
+                    else if (this.state.streak >= 10) mult = 3;
+                    else if (this.state.streak >= 5) mult = 2;
+
+                    const speedBonus = Math.max(0, Math.floor((3.0 - timeTaken) * 40));
+                    const gainedPoints = (q.weight * mult) + speedBonus;
+                    this.state.score += gainedPoints;
+
+                    if (this.state.streak % 5 === 0 && this.state.streak > 0) {
+                        this.audio.playCombo();
+                    } else {
+                        this.audio.playCorrect();
+                    }
+
+                    const clickX = event ? event.clientX : window.innerWidth / 2;
+                    const clickY = event ? event.clientY : window.innerHeight / 2;
+                    if (this.particles) this.particles.spawn(clickX, clickY, '#00FF9D', 30);
+
+                    this.spawnPopup(`+${gainedPoints}${speedBonus > 0 ? '⚡' : ''}`, clickX, clickY, '#00FF9D');
+
+                } else {
+                    this.state.stats.totalMistakes++;
+                    this.state.streak = 0;
+                    const penalty = 50;
+                    this.state.score = Math.max(0, this.state.score - penalty);
+
+                    this.audio.playError();
+
+                    const card = document.getElementById('equationCard');
+                    if (card) {
+                        card.classList.add('animate-shake');
+                        setTimeout(() => card.classList.remove('animate-shake'), 400);
+                    }
+
+                    const overlay = document.getElementById('damageOverlay');
+                    if (overlay) {
+                        overlay.classList.add('damage-flash');
+                        setTimeout(() => overlay.classList.remove('damage-flash'), 350);
+                    }
+
+                    const clickX = event ? event.clientX : window.innerWidth / 2;
+                    const clickY = event ? event.clientY : window.innerHeight / 2;
+                    this.spawnPopup(`-${penalty}`, clickX, clickY, '#FF3366');
+                }
+
+                this.updateHUD();
+                this.nextQuestion();
+            }
+
+            spawnPopup(text, x, y, color) {
+                const container = document.getElementById('popupContainer');
+                if (!container) return;
+                const pop = document.createElement('div');
+                pop.className = 'floating-popup text-2xl drop-shadow-lg';
+                pop.style.left = `${x - 20}px`;
+                pop.style.top = `${y - 20}px`;
+                pop.style.color = color;
+                pop.innerText = text;
+                container.appendChild(pop);
+                setTimeout(() => pop.remove(), 850);
+            }
+
+            endGame() {
+                clearInterval(this.state.timerInterval);
+                this.state.active = false;
+
+                document.getElementById('gameScreen').classList.add('hidden');
+                document.getElementById('analysisScreen').classList.remove('hidden');
+
+                const roundScore = this.state.score;
+                const stats = this.state.stats;
+                const totalAsked = stats.totalAsked || 1;
+                const accuracy = Math.round((stats.totalCorrect / totalAsked) * 100);
+
+                let totalTimeAll = 0;
+                Object.values(stats.byOperator).forEach(o => totalTimeAll += o.totalTime);
+                const avgSpeed = stats.totalAsked > 0 ? (totalTimeAll / stats.totalAsked).toFixed(2) : '0.0';
+
+                // Update local stats
+                const local = this.getLocalStats();
+                const newHighScore = Math.max(local.highScore || 0, roundScore);
+                const newTotalSolved = (local.totalMathSolved || 0) + stats.totalCorrect;
+                const newTotalXp = (local.totalXp || 0) + roundScore;
+                const newLevel = this.getLevelFromXp(newTotalXp);
+                const newSessions = (local.sessionsPlayed || 0) + 1;
+
+                this.saveLocalStats({
+                    highScore: newHighScore,
+                    totalMathSolved: newTotalSolved,
+                    totalXp: newTotalXp,
+                    userLevel: newLevel,
+                    sessionsPlayed: newSessions
+                });
+
+                document.getElementById('finalScore').innerText = roundScore.toLocaleString();
+                document.getElementById('finalTotalSolved').innerText = newTotalSolved.toLocaleString();
+                document.getElementById('finalAccuracy').innerText = `${accuracy}%`;
+                document.getElementById('finalMaxStreak').innerText = this.state.maxStreak;
+                document.getElementById('finalAvgSpeed').innerText = `${avgSpeed}s`;
+
+                const grid = document.getElementById('operatorBreakdownGrid');
+                grid.innerHTML = '';
+
+                const opLabels = { add: 'Addition (+)', sub: 'Subtraction (−)', mul: 'Multiplication (×)', div: 'Division (÷)' };
+                const opColors = { add: 'emerald', sub: 'cyan', mul: 'violet', div: 'coral' };
+
+                const strengths = [];
+                const weaknesses = [];
+
+                Object.keys(stats.byOperator).forEach(op => {
+                    const data = stats.byOperator[op];
+                    if (data.asked > 0) {
+                        const opAcc = Math.round((data.correct / data.asked) * 100);
+                        const opAvgTime = (data.totalTime / data.asked).toFixed(2);
+                        const color = opColors[op];
+
+                        const card = document.createElement('div');
+                        card.className = `glass-panel p-4 border-${color}/20 space-y-2`;
+                        card.innerHTML = `
+                            <div class="flex items-center justify-between">
+                                <span class="font-display font-bold text-xs text-white">${opLabels[op]}</span>
+                                <span class="text-xs font-mono text-${color} font-bold">${opAcc}% ACC</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                <div class="h-full bg-${color}" style="width: ${opAcc}%"></div>
+                            </div>
+                            <div class="flex justify-between text-[11px] font-mono text-slate-400">
+                                <span>Solved: ${data.correct}/${data.asked}</span>
+                                <span>Avg: ${opAvgTime}s</span>
+                            </div>
+                        `;
+                        grid.appendChild(card);
+
+                        if (opAcc >= 85 && parseFloat(opAvgTime) < 2.0) {
+                            strengths.push(`Exceptional speed & precision in ${opLabels[op]} (${opAcc}% acc, ${opAvgTime}s avg)`);
+                        } else if (opAcc < 70) {
+                            weaknesses.push(`Accuracy bottleneck in ${opLabels[op]} (${opAcc}% acc) - lower range sliders for refinement.`);
+                        } else if (parseFloat(opAvgTime) >= 2.5) {
+                            weaknesses.push(`Response delay in ${opLabels[op]} (${opAvgTime}s average delay) - practice rapid digit mental sync.`);
+                        }
+                    }
+                });
+
+                if (strengths.length === 0) {
+                    strengths.push("Consistent session completion - focus on building longer streak multipliers next run.");
+                }
+                if (weaknesses.length === 0) {
+                    weaknesses.push("Flawless execution! Increase digit range settings for higher point weight challenges.");
+                }
+
+                const sList = document.getElementById('strengthList');
+                const wList = document.getElementById('weaknessList');
+
+                if (sList) sList.innerHTML = strengths.map(s => `<li>${s}</li>`).join('');
+                if (wList) wList.innerHTML = weaknesses.map(w => `<li>${w}</li>`).join('');
+            }
+        }
+
+        var app = null;
+
+        function initThinkFastApp() {
+            try {
+                if (!window.app) {
+                    app = new ThinkFastApp();
+                    window.app = app;
+                    app.init();
+                }
+            } catch (err) {
+                console.warn('ThinkFast app initialization exception:', err);
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initThinkFastApp);
+        } else {
+            initThinkFastApp();
+        }
+    </script>
+</body>
+</html>
