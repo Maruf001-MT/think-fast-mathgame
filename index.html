@@ -217,6 +217,13 @@
                 </div>
             </div>
 
+            <div id="changePassBlock" class="pt-2 space-y-2 hidden">
+                <p class="font-mono text-xs text-slate-400">SET A NEW PASSWORD (works while signed in, including after a reset link)</p>
+                <input id="newPasswordInput" type="password" placeholder="New password (min 6 characters)" class="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm outline-none focus:border-cyan">
+                <button onclick="window.app && window.app.handleChangePassword()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald to-cyan font-display font-bold text-obsidian text-sm tracking-wider">SAVE NEW PASSWORD</button>
+                <p id="changePassMsg" class="text-xs text-slate-400"></p>
+            </div>
+
             <div class="pt-2 space-y-2">
                 <button id="signOutBtn" onclick="window.app && window.app.handleSignOut()" class="w-full py-2.5 rounded-xl bg-coral/10 hover:bg-coral/20 border border-coral/30 text-coral font-mono text-xs font-bold transition-all hidden">
                     SIGN OUT
@@ -803,6 +810,10 @@
                 if (!this.client) return this._noBackend();
                 return this._wrap(this.client.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin }));
             }
+            async updatePassword(newPassword) {
+                if (!this.client) return this._noBackend();
+                return this._wrap(this.client.auth.updateUser({ password: newPassword }));
+            }
             async getProfile() {
                 if (!this.client) return this._noBackend();
                 const userRes = await this.client.auth.getUser();
@@ -1260,11 +1271,22 @@
                 this.updateAuthUI();
                 this.showSyncBanner('Sign in to save your score to the global leaderboard.');
             }
+            async handleChangePassword() {
+                const msg = document.getElementById('changePassMsg');
+                const pw = document.getElementById('newPasswordInput').value;
+                if (!pw || pw.length < 6) { if (msg) { msg.textContent = 'Password must be at least 6 characters.'; msg.className = 'text-xs text-coral'; } return; }
+                const res = await this.backend.updatePassword(pw);
+                if (res.error) { if (msg) { msg.textContent = res.error.message || 'Could not save password.'; msg.className = 'text-xs text-coral'; } return; }
+                document.getElementById('newPasswordInput').value = '';
+                if (msg) { msg.textContent = 'Password saved. Use it next time you sign in.'; msg.className = 'text-xs text-emerald'; }
+            }
             updateAuthUI() {
                 const btn = document.getElementById('authBtn');
                 if (btn) btn.textContent = this.currentUser ? (this.profile && this.profile.display_name ? this.profile.display_name : 'ACCOUNT') : 'SIGN IN';
                 const signOutBtn = document.getElementById('signOutBtn');
                 if (signOutBtn) signOutBtn.classList.toggle('hidden', !this.currentUser);
+                const cp = document.getElementById('changePassBlock');
+                if (cp) cp.classList.toggle('hidden', !this.currentUser);
             }
             showSyncBanner(text) {
                 const el = document.getElementById('syncBanner');
