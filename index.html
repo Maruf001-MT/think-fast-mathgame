@@ -235,6 +235,40 @@
         </div>
     </div>
 
+    <!-- Global Leaderboard Modal (opened from the header trophy button; DB-backed, real players only) -->
+    <div id="leaderboardModal" class="fixed inset-0 bg-obsidian/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-lg p-6 relative border-gold/30 space-y-4">
+            <button onclick="window.app && window.app.closeLeaderboardModal()" class="absolute top-4 right-4 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-gold/15 border border-gold/50 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-trophy text-gold text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="font-display font-bold text-lg text-white tracking-wide">GLOBAL LEADERBOARD</h3>
+                    <p class="font-mono text-[10px] text-slate-400 tracking-widest">TOP 10 OPERATORS BY HIGH SCORE</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 font-mono text-[10px] text-slate-400 tracking-widest border-b border-white/10 pb-2">
+                <span class="w-8 shrink-0 text-center">RANK</span>
+                <span class="flex-1">OPERATOR</span>
+                <span class="w-14 shrink-0 text-center">LEVEL</span>
+                <span class="w-20 shrink-0 text-right">HIGH SCORE</span>
+            </div>
+            <ol id="leaderboardModalList" class="space-y-1 font-mono text-sm text-slate-300">
+                <li>Loading leaderboard...</li>
+            </ol>
+            <div class="flex items-center justify-between gap-2 border-t border-white/10 pt-3">
+                <p class="font-mono text-xs text-slate-400 truncate"><span class="text-cyan">&#9679;</span> <span id="leaderboardModalRank">Local &amp; Sync Standings</span></p>
+                <div class="flex gap-2 shrink-0">
+                    <button onclick="window.app && window.app.openDashboardModalFromLeaderboard()" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white font-mono text-xs font-bold">My Stats</button>
+                    <button onclick="window.app && window.app.fetchLeaderboard()" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white font-mono text-xs font-bold">&#8635; Refresh</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Auth Modal (same glass style as dashboardModal) -->
     <div id="authModal" class="fixed inset-0 bg-obsidian/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
         <div class="glass-panel w-full max-w-md p-6 relative border-cyan/30 shadow-neon-cyan space-y-5">
@@ -283,8 +317,8 @@
 
             <div class="flex items-center gap-3 sm:gap-4">
                 <button id="authBtn" onclick="window.app && window.app.handleAuthButton()" class="px-3 h-10 rounded-xl glass-tile flex items-center justify-center text-cyan font-mono text-xs font-bold hover:scale-105 transition-all" title="Sign in / Account">SIGN IN</button>
-                <button id="statsBtn" onclick="window.app && window.app.openDashboardModal()" class="w-10 h-10 rounded-xl glass-tile flex items-center justify-center text-gold hover:scale-105 transition-all" title="My Stats">
-                    <i class="fa-solid fa-chart-simple text-lg"></i>
+                <button id="statsBtn" onclick="window.app && window.app.openLeaderboardModal()" class="w-10 h-10 rounded-xl glass-tile flex items-center justify-center text-gold hover:scale-105 transition-all" title="Global Leaderboard">
+                    <i class="fa-solid fa-trophy text-lg"></i>
                 </button>
                 <button id="soundToggleBtn" onclick="window.app && window.app.toggleSound()" class="w-10 h-10 rounded-xl glass-tile flex items-center justify-center text-slate-300 hover:text-cyan transition-colors" title="Toggle Audio FX">
                     <i class="fa-solid fa-volume-high text-lg" id="soundIcon"></i>
@@ -1383,14 +1417,23 @@
             async fetchLeaderboard() {
                 const listEl = document.getElementById('leaderboardList');
                 const rankEl = document.getElementById('myRankRow');
+                const modalListEl = document.getElementById('leaderboardModalList');
+                const modalRankEl = document.getElementById('leaderboardModalRank');
                 if (!listEl) return;
                 listEl.innerHTML = '<li>Loading leaderboard...</li>';
+                if (modalListEl) modalListEl.innerHTML = '<li>Loading leaderboard...</li>';
                 if (rankEl) rankEl.textContent = '';
+                if (modalRankEl) modalRankEl.textContent = 'Local & Sync Standings';
                 const lbCfg = (this.remoteConfig && this.remoteConfig.leaderboard) || {};
-                if (lbCfg.enabled === false) { listEl.innerHTML = '<li>Leaderboard is disabled.</li>'; return; }
+                if (lbCfg.enabled === false) {
+                    listEl.innerHTML = '<li>Leaderboard is disabled.</li>';
+                    if (modalListEl) modalListEl.innerHTML = '<li>Leaderboard is disabled.</li>';
+                    return;
+                }
                 const res = await this.backend.getLeaderboard(lbCfg.size || 10);
                 if (res.error || !res.data) {
                     listEl.innerHTML = '<li>Leaderboard unavailable</li>';
+                    if (modalListEl) modalListEl.innerHTML = '<li>Leaderboard unavailable</li>';
                     return;
                 }
                 listEl.innerHTML = '';
@@ -1403,10 +1446,13 @@
                     listEl.appendChild(li);
                 });
                 if (res.data.length === 0) listEl.innerHTML = '<li>No scores yet — be the first.</li>';
+                this.renderLeaderboardModal(res.data);
                 if (this.currentUser && !res.data.some(function (r) { return r.user_id === self.currentUser.id; })) {
                     const rankRes = await this.backend.getMyRank();
-                    if (rankEl && !rankRes.error && this.profile) {
-                        rankEl.textContent = 'Your rank: #' + rankRes.data + ' — ' + (this.profile.display_name || 'Operator') + ' — ' + (this.profile.high_score || 0).toLocaleString() + ' pts';
+                    if (!rankRes.error && this.profile) {
+                        const rankText = 'Your rank: #' + rankRes.data + ' — ' + (this.profile.display_name || 'Operator') + ' — ' + (this.profile.high_score || 0).toLocaleString() + ' pts';
+                        if (rankEl) rankEl.textContent = rankText;
+                        if (modalRankEl) modalRankEl.textContent = rankText;
                     }
                 }
             }
@@ -1442,6 +1488,72 @@
             closeDashboardModal() {
                 const modal = document.getElementById('dashboardModal');
                 if (modal) modal.classList.add('hidden');
+            }
+
+            /* ---------- Global Leaderboard Modal ---------- */
+            openLeaderboardModal() {
+                const modal = document.getElementById('leaderboardModal');
+                if (!modal) return;
+                modal.classList.remove('hidden');
+                this.fetchLeaderboard();
+            }
+            closeLeaderboardModal() {
+                const modal = document.getElementById('leaderboardModal');
+                if (modal) modal.classList.add('hidden');
+            }
+            openDashboardModalFromLeaderboard() {
+                this.closeLeaderboardModal();
+                this.openDashboardModal();
+            }
+            renderLeaderboardModal(rows) {
+                const listEl = document.getElementById('leaderboardModalList');
+                if (!listEl) return;
+                listEl.innerHTML = '';
+                const self = this;
+                const avatarColors = ['bg-cyan text-obsidian', 'bg-emerald text-obsidian', 'bg-violet text-white', 'bg-fuchsia-500 text-white', 'bg-amber-400 text-obsidian', 'bg-rose-500 text-white'];
+                rows.forEach(function (row) {
+                    const isMe = self.currentUser && row.user_id === self.currentUser.id;
+                    const li = document.createElement('li');
+                    li.className = 'flex items-center gap-2 px-2 py-2 rounded-xl ' + (isMe ? 'bg-cyan/10 border border-cyan/40' : 'bg-white/[0.02]');
+                    const rank = document.createElement('span');
+                    rank.className = 'w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-display font-black text-xs ' + (row.rank === 1 ? 'bg-gold text-obsidian' : row.rank === 2 ? 'bg-slate-300 text-obsidian' : row.rank === 3 ? 'bg-amber-700 text-white' : 'text-slate-400');
+                    if (row.rank === 1) {
+                        const crown = document.createElement('i');
+                        crown.className = 'fa-solid fa-crown';
+                        rank.appendChild(crown);
+                    } else {
+                        rank.textContent = row.rank <= 3 ? String(row.rank) : '#' + row.rank;
+                    }
+                    li.appendChild(rank);
+                    const avatar = document.createElement('span');
+                    const name = row.display_name || 'Operator';
+                    avatar.className = 'w-8 h-8 shrink-0 rounded-lg flex items-center justify-center font-display font-black text-sm ' + avatarColors[(row.rank - 1) % avatarColors.length];
+                    avatar.textContent = name.charAt(0).toUpperCase();
+                    li.appendChild(avatar);
+                    const nameWrap = document.createElement('span');
+                    nameWrap.className = 'flex-1 min-w-0 flex items-center gap-2';
+                    if (isMe) {
+                        const you = document.createElement('span');
+                        you.className = 'px-1.5 py-0.5 rounded bg-cyan/20 border border-cyan/40 text-cyan font-mono font-bold text-[10px] shrink-0';
+                        you.textContent = 'YOU';
+                        nameWrap.appendChild(you);
+                    }
+                    const nameEl = document.createElement('span');
+                    nameEl.className = 'truncate ' + (isMe ? 'text-white font-bold' : 'text-slate-200');
+                    nameEl.textContent = name + (isMe ? ' (you)' : '');
+                    nameWrap.appendChild(nameEl);
+                    li.appendChild(nameWrap);
+                    const level = document.createElement('span');
+                    level.className = 'w-14 shrink-0 text-center px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-slate-300 text-[11px]';
+                    level.textContent = 'Lvl ' + row.user_level;
+                    li.appendChild(level);
+                    const score = document.createElement('span');
+                    score.className = 'w-20 shrink-0 text-right font-bold ' + (isMe ? 'text-cyan' : 'text-cyan');
+                    score.textContent = row.high_score.toLocaleString();
+                    li.appendChild(score);
+                    listEl.appendChild(li);
+                });
+                if (rows.length === 0) listEl.innerHTML = '<li>No scores yet — be the first.</li>';
             }
 
             /* ---------- Audio ---------- */
